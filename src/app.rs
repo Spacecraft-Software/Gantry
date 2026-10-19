@@ -14,7 +14,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use zeroize::Zeroizing;
 
 use crate::art::Banner;
-use crate::auth::{Command, Event, MessageKind};
+use crate::auth::{Command, Event, MessageKind, Touch};
 use crate::config::Config;
 use crate::fingerprint::{self, Signal};
 use crate::fx::{self, Background, EffectKind, TextFxKind};
@@ -182,6 +182,8 @@ pub struct App {
     commands: Sender<Command>,
     /// The greeter should exit.
     pub quit: bool,
+    /// `--test-fingerprint`: the simulated reader's touch channel.
+    pub touches: Option<Sender<Touch>>,
 }
 
 /// Everything [`App::new`] needs.
@@ -211,6 +213,8 @@ pub struct AppInit {
     pub screensaver: bool,
     /// Current time.
     pub now: Instant,
+    /// `--test-fingerprint`: where F9/F10 send simulated touches.
+    pub touches: Option<Sender<Touch>>,
 }
 
 impl App {
@@ -230,6 +234,7 @@ impl App {
             test_mode,
             screensaver,
             now,
+            touches,
         } = init;
         if theme_inputs.cli.is_none() {
             theme_inputs.cli.clone_from(&state.theme);
@@ -282,6 +287,7 @@ impl App {
             last_input: now,
             commands,
             quit: false,
+            touches,
             cfg,
         };
         if animations {
@@ -339,6 +345,12 @@ impl App {
             Event::Message { kind, text } => self.on_pam_message(kind, &text),
             Event::Prompt { text, secret } => {
                 let buffered = std::mem::take(&mut self.submit_on_prompt);
+                if matches!(self.phase, Phase::Scanning(_)) {
+                    self.set_status(
+                        Level::Info,
+                        "Fingerprint not recognized — type your password",
+                    );
+                }
                 if !secret {
                     // Type-ahead was meant for a password; never show it or send it
                     // as the answer to a visible question.
@@ -414,7 +426,8 @@ impl App {
                 self.set_status(Level::Warn, text);
             }
             Some(Signal::TimedOut | Signal::Failure) => {
-                self.set_status(Level::Info, &format!("{text} — use your password"));
+                // pam_fprintd may retry after this, so don't promise a password yet.
+                self.set_status(Level::Info, text);
             }
             None => {
                 let level = if kind == MessageKind::Error {
@@ -437,6 +450,9 @@ impl App {
         if self.panel == Some(Panel::Screensaver) {
             // The waking key is consumed so it never lands in a field.
             self.panel = None;
+            return out;
+        }
+        if self.simulated_touch(&key) {
             return out;
         }
         let action = self.keymap.action(&key);
@@ -480,6 +496,27 @@ impl App {
                 "Accessible mode opens once this login step finishes",
             ),
         }
+    }
+
+    /// `--test-fingerprint` only: F9 is an enrolled finger, F10 a wrong one.
+    fn simulated_touch(&mut self, key: &KeyEvent) -> bool {
+        let touch = match key.code {
+            KeyCode::F(9) => Touch::Match,
+            KeyCode::F(10) => Touch::Wrong,
+            _ => return false,
+        };
+        let Some(tx) = self
+            .touches
+            .as_ref()
+            .filter(|_| matches!(self.phase, Phase::Scanning(_)))
+        else {
+            return false;
+        };
+        let sent = tx.send(touch).is_ok();
+        if sent {
+            self.set_status(Level::Info, "Test: finger on the reader");
+        }
+        sent
     }
 
     fn can_change_session(&self) -> bool {
@@ -833,6 +870,7 @@ mod tests {
             test_mode: true,
             screensaver: false,
             now: Instant::now(),
+            touches: None,
         });
         (app, rx)
     }
@@ -1049,6 +1087,24 @@ mod tests {
         type_text(&mut app, &"é".repeat(400));
         assert_eq!(app.answer.capacity(), cap);
         assert!(app.answer.len() <= FIELD_MAX);
+    }
+
+    #[test]
+    fn test_keys_touch_the_simulated_reader_only_while_scanning() {
+        let (mut app, _rx) = app();
+        let (tx, trx) = mpsc::channel();
+        app.touches = Some(tx);
+        key(&mut app, KeyCode::F(9));
+        assert!(trx.try_recv().is_err(), "no touch outside a scan");
+        app.phase = Phase::Scanning(Scan {
+            misses: 0,
+            since: 0,
+            wants_password: false,
+        });
+        key(&mut app, KeyCode::F(10));
+        key(&mut app, KeyCode::F(9));
+        assert_eq!(trx.try_recv().ok(), Some(Touch::Wrong));
+        assert_eq!(trx.try_recv().ok(), Some(Touch::Match));
     }
 
     #[test]

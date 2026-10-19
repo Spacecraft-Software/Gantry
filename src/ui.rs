@@ -272,6 +272,12 @@ fn draw_scanner(frame: &mut Frame<'_>, app: &App, scan: Scan, area: Rect) {
         },
         Style::default().fg(s.foreground).bg(s.surface),
     ));
+    if app.touches.is_some() {
+        lines.push(Line::styled(
+            "Test: F9 match, F10 wrong finger",
+            Style::default().fg(s.foreground).bg(s.surface),
+        ));
+    }
     if scan.wants_password {
         lines.push(Line::styled(
             "Password follows the scan",
@@ -568,6 +574,7 @@ mod tests {
             test_mode: true,
             screensaver: false,
             now: Instant::now(),
+            touches: None,
         });
         prep(&mut app);
         for _ in 0..90 {

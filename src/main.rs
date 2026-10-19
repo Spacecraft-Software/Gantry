@@ -55,7 +55,7 @@ struct Cli {
     /// Run against a simulated greetd; nothing is authenticated or started.
     #[arg(long)]
     test: bool,
-    /// With --test, simulate a fingerprint reader (user names containing "finger" match).
+    /// With --test, simulate a fingerprint reader: F9 is a matching finger, F10 a wrong one.
     #[arg(long, requires = "test")]
     test_fingerprint: bool,
     /// Configuration file.
@@ -185,10 +185,19 @@ fn main() -> anyhow::Result<()> {
         state::State::default()
     };
 
+    // `--test-fingerprint`: a simulated reader with pam_fprintd's real timing
+    // (the module's 10 s window); F9/F10 stand in for touching it.
+    let (touch_tx, touch_rx) = if cli.test_fingerprint {
+        let (tx, rx) = mpsc::channel();
+        (Some(tx), Some(rx))
+    } else {
+        (None, None)
+    };
     let backend: Box<dyn auth::Backend> = if cli.test {
         Box::new(auth::Mock::new(
             cli.test_fingerprint,
-            Duration::from_millis(1500),
+            Duration::from_secs(10),
+            touch_rx,
         ))
     } else {
         Box::new(auth::Greetd::connect()?)
@@ -212,6 +221,7 @@ fn main() -> anyhow::Result<()> {
             test_mode: cli.test,
             screensaver: cli.screensaver,
             now: Instant::now(),
+            touches: touch_tx,
         });
         if let Some(w) = cfg_warning.iter().chain(&key_warnings).next() {
             app.status = Some((Level::Warn, w.clone()));

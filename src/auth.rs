@@ -264,36 +264,67 @@ fn send(events: &Sender<Event>, ev: Event) -> anyhow::Result<()> {
         .map_err(|_closed| anyhow::anyhow!("UI is gone"))
 }
 
+/// A simulated finger on the `--test` reader.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Touch {
+    /// An enrolled finger: the scan matches.
+    Match,
+    /// Any other finger: the scan fails.
+    Wrong,
+}
+
+/// Tries `pam_fprintd` allows by default (`max-tries=3`).
+const MOCK_TRIES: u8 = 3;
+
 /// A stand-in for greetd used by `--test`.
 ///
-/// Any password except `fail` succeeds. With a simulated sensor, a user whose
-/// name contains `finger` matches on the first scan; anyone else fails twice,
-/// times out, and falls back to a password, mirroring `pam_fprintd` stacked
-/// before `pam_unix`.
+/// Any password except `fail` succeeds. With a simulated reader it mirrors
+/// `pam_fprintd` stacked before `pam_unix`: each try waits up to the scan
+/// window for a [`Touch`]; a wrong finger or a timeout uses up one try and
+/// the scan restarts; after the last try the password prompt follows.
 #[derive(Debug)]
 pub struct Mock {
     fingerprint: bool,
-    scan_time: Duration,
+    window: Duration,
+    touches: Option<Receiver<Touch>>,
     state: MockState,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MockState {
     Idle,
-    Scanning { user: String, tries_left: u8 },
-    TimedOut,
+    /// "Place your finger" was sent; the next ack starts waiting for a touch.
+    Scanning {
+        tries_left: u8,
+    },
+    /// A failure or timeout notice was sent; the next ack restarts or gives up.
+    Missed {
+        tries_left: u8,
+    },
     Password,
     Authenticated,
 }
 
 impl Mock {
-    /// Creates the mock; `fingerprint` simulates a reader.
+    /// Creates the mock. `fingerprint` simulates a reader whose scans wait up
+    /// to `window` for a touch from `touches`.
     #[must_use]
-    pub fn new(fingerprint: bool, scan_time: Duration) -> Self {
+    pub fn new(fingerprint: bool, window: Duration, touches: Option<Receiver<Touch>>) -> Self {
         Self {
             fingerprint,
-            scan_time,
+            window,
+            touches,
             state: MockState::Idle,
+        }
+    }
+
+    /// Waits for a touch; `None` means the window closed.
+    fn wait_for_touch(&self) -> Option<Touch> {
+        if let Some(rx) = &self.touches {
+            rx.recv_timeout(self.window).ok()
+        } else {
+            std::thread::sleep(self.window);
+            None
         }
     }
 }
@@ -304,18 +335,20 @@ impl Backend for Mock {
             auth_message_type: t,
             auth_message: s.to_owned(),
         };
+        let place = || {
+            msg(
+                AuthMessageType::Info,
+                "Place your right index finger on the fingerprint reader",
+            )
+        };
         let password = || msg(AuthMessageType::Secret, "Password:");
         let resp = match (req, std::mem::replace(&mut self.state, MockState::Idle)) {
-            (Request::CreateSession { username }, _) => {
+            (Request::CreateSession { .. }, _) => {
                 if self.fingerprint {
                     self.state = MockState::Scanning {
-                        user: username.clone(),
-                        tries_left: 2,
+                        tries_left: MOCK_TRIES,
                     };
-                    msg(
-                        AuthMessageType::Info,
-                        "Place your right index finger on the fingerprint reader",
-                    )
+                    place()
                 } else {
                     self.state = MockState::Password;
                     password()
@@ -323,26 +356,35 @@ impl Backend for Mock {
             }
             (
                 Request::PostAuthMessageResponse { response: None },
-                MockState::Scanning { user, tries_left },
+                MockState::Scanning { tries_left },
             ) => {
-                std::thread::sleep(self.scan_time);
-                if user.contains("finger") {
-                    self.state = MockState::Authenticated;
-                    Response::Success
-                } else if tries_left > 1 {
-                    self.state = MockState::Scanning {
-                        user,
-                        tries_left: tries_left - 1,
-                    };
-                    msg(AuthMessageType::Error, "Failed to match fingerprint")
-                } else {
-                    self.state = MockState::TimedOut;
-                    msg(AuthMessageType::Info, "Verification timed out")
+                let left = tries_left.saturating_sub(1);
+                match self.wait_for_touch() {
+                    Some(Touch::Match) => {
+                        self.state = MockState::Authenticated;
+                        Response::Success
+                    }
+                    Some(Touch::Wrong) => {
+                        self.state = MockState::Missed { tries_left: left };
+                        msg(AuthMessageType::Error, "Failed to match fingerprint")
+                    }
+                    None => {
+                        self.state = MockState::Missed { tries_left: left };
+                        msg(AuthMessageType::Info, "Verification timed out")
+                    }
                 }
             }
-            (Request::PostAuthMessageResponse { response: None }, MockState::TimedOut) => {
-                self.state = MockState::Password;
-                password()
+            (
+                Request::PostAuthMessageResponse { response: None },
+                MockState::Missed { tries_left },
+            ) => {
+                if tries_left > 0 {
+                    self.state = MockState::Scanning { tries_left };
+                    place()
+                } else {
+                    self.state = MockState::Password;
+                    password()
+                }
             }
             (Request::PostAuthMessageResponse { response: Some(pw) }, MockState::Password) => {
                 if pw == "fail" {
@@ -386,10 +428,27 @@ mod tests {
     use super::*;
 
     fn run(fingerprint: bool, user: &str, password: Option<&str>) -> Vec<Event> {
+        run_with(fingerprint, &[], user, password)
+    }
+
+    fn run_with(
+        fingerprint: bool,
+        touches: &[Touch],
+        user: &str,
+        password: Option<&str>,
+    ) -> Vec<Event> {
+        let (ttx, trx) = mpsc::channel();
+        for t in touches {
+            ttx.send(*t).expect("queue touch");
+        }
         let (ctx, crx) = mpsc::channel();
         let (etx, erx) = mpsc::channel();
-        let handle =
-            spawn(Box::new(Mock::new(fingerprint, Duration::ZERO)), crx, etx).expect("spawn");
+        let handle = spawn(
+            Box::new(Mock::new(fingerprint, Duration::ZERO, Some(trx))),
+            crx,
+            etx,
+        )
+        .expect("spawn");
         ctx.send(Command::Begin {
             username: user.into(),
         })
@@ -446,19 +505,29 @@ mod tests {
 
     #[test]
     fn fingerprint_match_skips_the_password() {
-        let ev = run(true, "finger", None);
+        let ev = run_with(true, &[Touch::Match], "mj", None);
         assert!(ev.iter().all(|e| !matches!(e, Event::Prompt { .. })));
         assert_eq!(ev.last(), Some(&Event::Started));
     }
 
     #[test]
     fn failed_scans_fall_back_to_password() {
-        let ev = run(true, "mj", None);
-        let messages = ev
+        // One wrong finger, then two empty windows: three tries, as pam_fprintd.
+        let ev = run_with(true, &[Touch::Wrong], "mj", None);
+        let texts: Vec<&str> = ev
             .iter()
-            .filter(|e| matches!(e, Event::Message { .. }))
-            .count();
-        assert_eq!(messages, 3, "place, failed, timed out");
+            .filter_map(|e| match e {
+                Event::Message { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            texts.len(),
+            6,
+            "place/failed, place/timed out, place/timed out: {texts:?}"
+        );
+        assert_eq!(texts.get(1), Some(&"Failed to match fingerprint"));
+        assert_eq!(texts.get(5), Some(&"Verification timed out"));
         assert!(
             ev.iter()
                 .any(|e| matches!(e, Event::Prompt { secret: true, .. }))
@@ -470,7 +539,7 @@ mod tests {
     fn answers_never_print() {
         let cmd = Command::Answer(Zeroizing::new("hunter2".into()));
         assert!(!format!("{cmd:?}").contains("hunter2"));
-        let mut mock = Mock::new(false, Duration::ZERO);
+        let mut mock = Mock::new(false, Duration::ZERO, None);
         let resp = mock
             .exchange(&Request::PostAuthMessageResponse {
                 response: Some("hunter2".into()),
