@@ -1,0 +1,83 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Mohamed Hammad <Mohamed.Hammad@SpacecraftSoftware.org>
+
+[package]
+name = "gantry"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "A themed, animated greetd greeter for the Linux console and kiosk terminals"
+authors = ["Mohamed Hammad <Mohamed.Hammad@SpacecraftSoftware.org>"]
+license = "GPL-3.0-or-later"
+homepage = "https://github.com/Spacecraft-Software/Gantry"
+repository = "https://github.com/Spacecraft-Software/Gantry"
+readme = "README.md"
+keywords = ["greetd", "greeter", "login", "tui", "ratatui"]
+categories = ["command-line-utilities", "authentication"]
+
+[dependencies]
+anyhow = "1.0.104"
+clap = { version = "4.6.7", features = ["derive"] }
+greetd_ipc = { version = "0.10", features = ["sync-codec"] }
+jiff = "0.2.38"
+ratatui = "0.30"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+toml = "0.9"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+zeroize = "1.9.1"
+
+[dev-dependencies]
+
+# Release profile — Standard §3.2 flag notation:
+#   APPLIED  lto = "thin"         cross-crate inlining at modest link cost.
+#   APPLIED  codegen-units = 1    better optimization of the single binary.
+#   APPLIED  panic = "abort"      a greeter that panics must die so greetd restarts it.
+#   APPLIED  strip = "symbols"    smaller closure in /nix/store.
+#   DISABLED -C target-cpu=native the binary ships in a shared Nix closure that must
+#                                 run on every Bravais machine, so no host-specific ISA.
+#   DISABLED PGO                  no representative workload yet (an idle login screen).
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+[lints.rust]
+unsafe_code = "forbid"
+ambiguous_negative_literals = "warn"
+missing_debug_implementations = "warn"
+redundant_imports = "warn"
+redundant_lifetimes = "warn"
+trivial_numeric_casts = "warn"
+unsafe_op_in_unsafe_fn = "warn"
+unused_lifetimes = "warn"
+
+[lints.clippy]
+cargo = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+correctness = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
+allow_attributes_without_reason = "warn"
+assertions_on_result_states = "warn"
+clone_on_ref_ptr = "warn"
+deref_by_slicing = "warn"
+empty_drop = "warn"
+empty_enum_variants_with_brackets = "warn"
+empty_structs_with_brackets = "warn"
+if_then_some_else_none = "warn"
+map_err_ignore = "warn"
+redundant_type_annotations = "warn"
+renamed_function_params = "warn"
+semicolon_outside_block = "warn"
+undocumented_unsafe_blocks = "warn"
+unneeded_field_pattern = "warn"
+unused_result_ok = "warn"
+literal_string_with_formatting_args = "allow"
+# Transitive crates (crossterm, ratatui, jiff) pull several versions of a few
+# small crates; that is outside Gantry's control.
+multiple_crate_versions = "allow"

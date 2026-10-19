@@ -1,0 +1,115 @@
+# Gantry
+
+Gantry is a themed, animated login greeter for [greetd](https://git.sr.ht/~kennylevinsen/greetd), written in Rust for Steelbore OS Bravais. It runs straight on the Linux console, with no compositor, GPU stack or terminal emulator. It can also run inside a fullscreen terminal (niri + Alacritty) for 24-bit colour.
+
+Its look takes after [sysc-greet](https://github.com/Nomadcxx/sysc-greet): ASCII-art banners, animated backgrounds, a screensaver, and menus on the F-keys. All of Gantry's code, art and themes are new.
+
+**Status:** v0, pre-release. The design and open questions live in the Gantry PRD.
+
+## Features
+
+- **Login:** greetd IPC, user picker from `/etc/passwd`, XDG session picker, a configurable default shell session, a Caps Lock warning, and remembering the last user and session.
+- **Fingerprint:** shows `pam_fprintd` prompts as an animated scanner. Keys you type during a scan are buffered and sent when the password prompt arrives.
+- **Themes:** all 21 registered Steelbore themes, read from the palette file. Steelbore Modern is the default. On the Linux console, Gantry loads the theme into the console's 16 palette slots, then restores the defaults on exit.
+- **Effects:** starfield, DOOM-style fire, matrix rain and plasma backgrounds; typewriter and beam effects on the banner.
+- **Screensaver:** a large clock with the date and cycling art after an idle timeout.
+- **Accessible mode:** a line-by-line login with no art or animation, for Speakup and BRLTTY.
+
+## Try it
+
+```nu
+cargo run -- --test                      # simulated greetd; any password but "fail" works
+cargo run -- --test --test-fingerprint   # simulated reader; users named *finger* match
+cargo run -- --test --accessible         # linear accessible mode
+cargo run -- sessions --json             # non-interactive session list
+```
+
+## Keys
+
+| Action | CUA | Vim-style |
+| --- | --- | --- |
+| Next / previous field | Tab / Shift+Tab | Ctrl+J / Ctrl+K |
+| Submit | Enter | Enter |
+| Back | Esc | Esc |
+| Settings (theme, effects) | F1 | Alt+T |
+| Session picker | F2 | Alt+S |
+| Power menu | F12 | Alt+P |
+| Banner variant | PgUp / PgDn | Alt+H / Alt+L |
+| Accessible mode | F5 | Alt+A |
+| Pick user | Up / Down | Ctrl+P / Ctrl+N |
+
+You can remap any of these under `[keys]` in the config.
+
+## NixOS
+
+```nix
+{
+  inputs.gantry.url = "github:Spacecraft-Software/Gantry";
+  outputs = { nixpkgs, gantry, ... }: {
+    nixosConfigurations.host = nixpkgs.lib.nixosSystem {
+      modules = [
+        gantry.nixosModules.default
+        {
+          services.fprintd.enable = true;      # optional
+          services.gantry = {
+            enable = true;
+            mode = "vt";                       # or "kiosk"
+            settings.general.effect = "starfield";
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+## Configuration
+
+`/etc/gantry/config.toml`. Every key is optional, and a malformed file falls back to the defaults with a warning. The NixOS module writes this file from `services.gantry.settings`.
+
+```toml
+[general]
+greeting = "Steelbore OS Bravais"
+default_session = ["nu", "--login"]
+effect = "starfield"        # fire | matrix | starfield | plasma | none
+text_effect = "typewriter"  # typewriter | beams | none
+animations = true
+remember = true
+
+[theme]
+name = "steelbore"
+
+[screensaver]
+idle_timeout = "PT5M"
+
+[fingerprint]
+type_ahead = true
+
+[keys]
+power_menu = ["F12", "Ctrl+q"]
+```
+
+Per-session banners go in `art_dir`, one file per session: `<session>.toml` with `description = "..."` and `variants = ["""..."""]`.
+
+## Design notes
+
+- **No authentication in Gantry.** greetd runs PAM as root. Gantry relays prompts and answers, and wipes passwords from memory after sending them.
+- **Two threads.** One greetd reply can block for a whole fingerprint scan, so the socket lives on a worker thread and the UI never stalls.
+- **No `unsafe`.** `#![forbid(unsafe_code)]`. Caps Lock is read from sysfs LEDs rather than an ioctl.
+- **Skip key for fingerprint scans.** greetd holds a lock while PAM waits for the sensor, so a greeter cannot cancel a scan. Gantry relies on type-ahead and a short `pam_fprintd` timeout (10 s via the module) instead.
+
+## Project Posture
+
+Gantry is a personal hobby project of Spacecraft Software, built for the maintainer's own use. It comes with no warranty and no service commitments. See [NOTICE.md](NOTICE.md), [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
+
+- **Component system (§13):** not applicable. Gantry is a terminal UI built on ratatui.
+- **Theme (§11):** Steelbore Modern by default; all 21 registered themes are available. It is dark-only (`light = none`) because a console exposes no colour-scheme preference.
+- **Conformance (§19):** The Steelbore Standard v2.12, Category C (provisional), tailored, pre-release.
+
+## License
+
+GPL-3.0-or-later. Copyright (C) 2026 Mohamed Hammad & Spacecraft Software.
+
+Maintainer: Mohamed Hammad <Mohamed.Hammad@SpacecraftSoftware.org>
+
+*— Built by Spacecraft Software —*
