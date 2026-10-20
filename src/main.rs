@@ -381,10 +381,8 @@ fn console_font(app: &mut App, test: bool) -> Option<FontGuard> {
         Err(e) => {
             tracing::warn!("katakana console font not loaded: {e:#}");
             if app.status.is_none() {
-                app.status = Some((
-                    Level::Warn,
-                    "Console font not loaded; see the log".to_owned(),
-                ));
+                // No log file unless --log is given, so the reason goes on screen.
+                app.status = Some((Level::Warn, format!("Katakana font not loaded: {e}")));
             }
             None
         }
