@@ -70,6 +70,11 @@ let
   '';
 
   kioskCmd = "${getExe cfg.kiosk.compositor} --config ${niriConfig}";
+
+  # The PAM service greetd authenticates through (see the comment at its use).
+  fprintService = if lib.versionAtLeast lib.trivial.release "26.11" then "login" else "greetd";
+
+  sessionDesktops = config.services.displayManager.sessionData.desktops;
 in
 {
   options.services.gantry = {
@@ -111,10 +116,10 @@ in
         default = config.services.fprintd.enable;
         defaultText = lib.literalExpression "config.services.fprintd.enable";
         description = ''
-          Offer fingerprint login through `pam_fprintd`. The greetd PAM
-          stack substacks `login`, so this sets `fprintAuth` and the
-          `pam_fprintd` arguments on the `login` service, which also
-          affects console login.
+          Offer fingerprint login through `pam_fprintd`. On nixos-26.05 this
+          sets `fprintAuth` and the `pam_fprintd` arguments on the `greetd`
+          PAM service; from 26.11, where greetd substacks `login`, on the
+          `login` service (which also covers console login).
         '';
       };
 
@@ -155,6 +160,13 @@ in
       };
     };
 
+    # Offer the same sessions every NixOS display manager sees. Gantry treats
+    # the `xsessions` directory as X11.
+    services.gantry.settings.session_dirs = mkDefault [
+      "${sessionDesktops}/share/wayland-sessions"
+      "${sessionDesktops}/share/xsessions"
+    ];
+
     environment.etc."gantry/config.toml".source = configFile;
     environment.systemPackages = [ cfg.package ];
 
@@ -166,10 +178,14 @@ in
 
     fonts.packages = mkIf (cfg.mode == "kiosk") [ pkgs.inconsolata ];
 
-    # nixpkgs' greetd PAM service has no rules of its own: it substacks
-    # `login` (useDefaultRules = false), so fingerprint lives on `login`.
-    security.pam.services.login = {
-      # Overrides nixpkgs' default (fprintd.enable) in both directions.
+    # Where pam_fprintd runs depends on the nixpkgs release:
+    #   - nixos-26.05 and earlier: greetd has its own PAM service with the
+    #     default rules, so fingerprint is configured on `greetd`.
+    #   - 26.11 (unstable) and later: greetd substacks `login`
+    #     (useDefaultRules = false), so it is configured on `login`.
+    # A host that pins fprintAuth itself (a plain definition) still wins over
+    # these mkDefaults.
+    security.pam.services.${fprintService} = {
       fprintAuth = mkDefault cfg.fingerprint.enable;
       rules.auth.fprintd.settings = mkIf cfg.fingerprint.enable {
         timeout = cfg.fingerprint.timeout;

@@ -105,7 +105,7 @@ impl Session {
 #[must_use]
 pub fn discover(shell: &[String], extra: &[PathBuf]) -> Vec<Session> {
     let mut out: Vec<Session> = Session::shell(shell).into_iter().collect();
-    let dirs = extra.iter().map(|p| (p.clone(), Kind::Wayland)).chain(
+    let dirs = extra.iter().map(|p| (p.clone(), kind_of_dir(p))).chain(
         DEFAULT_SESSION_DIRS
             .iter()
             .map(|(p, k)| (PathBuf::from(p), *k)),
@@ -134,6 +134,16 @@ pub fn discover(shell: &[String], extra: &[PathBuf]) -> Vec<Session> {
         }
     }
     out
+}
+
+/// X11 when the directory is an `xsessions` dir (the XDG convention, and
+/// NixOS's `sessionData.desktops/share/xsessions`), otherwise Wayland.
+fn kind_of_dir(dir: &Path) -> Kind {
+    if dir.file_name().is_some_and(|n| n == "xsessions") {
+        Kind::X11
+    } else {
+        Kind::Wayland
+    }
 }
 
 /// Parses the `[Desktop Entry]` group of a session file.
@@ -308,6 +318,31 @@ mod tests {
             split_exec(r#"run """#),
             Some(vec!["run".into(), String::new()])
         );
+    }
+
+    #[test]
+    fn extra_dirs_take_their_kind_from_the_name() {
+        assert_eq!(
+            kind_of_dir(Path::new("/nix/store/x-desktops/share/xsessions")),
+            Kind::X11
+        );
+        assert_eq!(
+            kind_of_dir(Path::new("/nix/store/x-desktops/share/wayland-sessions")),
+            Kind::Wayland
+        );
+    }
+
+    #[test]
+    fn empty_wrapper_runs_x11_exec_unchanged() {
+        let s = Session {
+            name: "LeftWM".into(),
+            exec: vec!["start-leftwm".into()],
+            kind: Kind::X11,
+            desktop_names: None,
+            source: None,
+        };
+        let (cmd, _) = s.launch(&[]);
+        assert_eq!(cmd, vec!["start-leftwm"]);
     }
 
     #[test]
