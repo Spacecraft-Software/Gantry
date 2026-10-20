@@ -24,10 +24,15 @@
         gantry = final.callPackage ./packaging/default.nix { };
       };
 
-      nixosModules.default = {
-        imports = [ ./nix/module.nix ];
-        nixpkgs.overlays = [ self.overlays.default ];
-      };
+      # The module brings its own package (built from this flake's nixpkgs)
+      # instead of adding an overlay, so hosts that forbid input overlays,
+      # or that pass a pre-built pkgs, can import it unchanged.
+      nixosModules.default =
+        { lib, pkgs, ... }:
+        {
+          imports = [ ./nix/module.nix ];
+          services.gantry.package = lib.mkDefault self.packages.${pkgs.stdenv.hostPlatform.system}.gantry;
+        };
 
       checks = forAllSystems (pkgs: {
         inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) gantry;
