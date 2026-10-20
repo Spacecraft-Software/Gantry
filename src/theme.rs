@@ -494,36 +494,15 @@ pub struct Styles {
     pub vt_slots: Option<[Rgb; 16]>,
 }
 
-/// Which theme token the effect ramp runs through.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Tint {
-    /// Canvas → accent → foreground (most effects).
-    #[default]
-    Accent,
-    /// Canvas → success → foreground (the Matrix rain's green).
-    Success,
-}
-
 impl Styles {
-    /// Builds styles for `def` in `mode` with the default accent ramp.
-    #[cfg(test)]
+    /// Builds styles for `def` in `mode`.
     #[must_use]
     pub fn new(def: &ThemeDef, mode: ColorMode) -> Self {
-        Self::tinted(def, mode, Tint::Accent)
-    }
-
-    /// Builds styles for `def` in `mode`, with the effect ramp through `tint`.
-    #[must_use]
-    pub fn tinted(def: &ThemeDef, mode: ColorMode, tint: Tint) -> Self {
         let rgb = |t: Token| match t {
             Token::Rgb(c) => Some(c),
             Token::Ansi(_) | Token::Reverse => None,
         };
-        let through = match tint {
-            Tint::Accent => def.accent,
-            Tint::Success => def.success,
-        };
-        let roles = (rgb(def.background), rgb(through), rgb(def.foreground));
+        let roles = (rgb(def.background), rgb(def.accent), rgb(def.foreground));
         // A theme is "exact" when its core roles carry RGB values (all but mono).
         let ramp_rgb = match roles {
             (Some(bg), Some(accent), Some(fg)) => Some(ramp(bg, accent, fg)),
@@ -596,14 +575,13 @@ impl Styles {
                 background,
                 foreground,
                 accent,
-                success,
             },
             vt_slots,
         }
     }
 }
 
-/// Eight decorative steps from canvas through a tint to foreground. These are
+/// Eight decorative steps from canvas through accent to foreground. These are
 /// blends of the theme's own tokens, used only to fill animation cells, never
 /// for text, so no contrast pairing depends on them.
 fn ramp(bg: Rgb, accent: Rgb, fg: Rgb) -> [Rgb; 8] {
@@ -767,25 +745,6 @@ mod tests {
         let styles = Styles::new(reg.get(MONO).expect("mono"), ColorMode::LinuxVt);
         assert!(styles.vt_slots.is_none());
         assert!(styles.focus.is_none());
-    }
-
-    #[test]
-    fn success_tint_runs_the_ramp_through_green() {
-        let reg = registry();
-        let def = reg.get(DEFAULT_THEME).expect("default");
-        let styles = Styles::tinted(def, ColorMode::LinuxVt, Tint::Success);
-        let slots = styles.vt_slots.expect("rgb theme");
-        // Ramp step 4 is the tint itself; it lives in VT slot 12 (9 + 4 - 1).
-        assert_eq!(Token::Rgb(slots[12]), def.success);
-        let plain = Styles::new(def, ColorMode::LinuxVt)
-            .vt_slots
-            .expect("rgb theme");
-        assert_eq!(Token::Rgb(plain[12]), def.accent);
-        assert_eq!(
-            slots[..9],
-            plain[..9],
-            "role slots never change with the tint"
-        );
     }
 
     #[test]

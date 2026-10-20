@@ -21,7 +21,7 @@ use crate::fx::{self, Background, EffectKind, TextFxKind};
 use crate::keys::{Action, Keymap};
 use crate::sessions::{Session, User};
 use crate::state::State;
-use crate::theme::{self, ColorMode, Registry, Styles, ThemeInputs, Tint};
+use crate::theme::{self, ColorMode, Registry, Styles, ThemeInputs};
 
 /// Frames per second of the UI loop.
 pub const FPS: u64 = 30;
@@ -241,6 +241,7 @@ impl App {
         if theme_inputs.cli.is_none() {
             theme_inputs.cli.clone_from(&state.theme);
         }
+        let styles = styles_for(&registry, &theme_inputs, mode);
         let session = state
             .session
             .as_deref()
@@ -256,7 +257,6 @@ impl App {
             .as_deref()
             .and_then(|e| e.parse().ok())
             .unwrap_or(cfg.general.effect);
-        let styles = styles_for(&registry, &theme_inputs, mode, tint_for(effect_kind));
         let text_fx = cfg.general.text_effect;
         let banner = banner_for(&cfg, sessions.get(session));
         let animations = cfg.general.animations;
@@ -755,12 +755,7 @@ impl App {
                 if let Some(slug) = reg.get(next) {
                     self.theme_inputs.cli = Some(slug.clone());
                     // A whole-surface, atomic switch (§11.6.2): every role is replaced at once.
-                    self.styles = styles_for(
-                        &self.registry,
-                        &self.theme_inputs,
-                        self.mode,
-                        tint_for(self.effect_kind),
-                    );
+                    self.styles = styles_for(&self.registry, &self.theme_inputs, self.mode);
                     out.reload_palette = true;
                     self.remember(|st, app| st.theme = Some(app.styles.slug.clone()));
                 }
@@ -768,14 +763,6 @@ impl App {
             1 => {
                 self.effect_kind = self.effect_kind.next();
                 self.effect = fx::make(self.effect_kind, self.tick ^ 0x6A17_7259);
-                // Each effect may tint the ramp; reload it (and the VT slots) at once.
-                self.styles = styles_for(
-                    &self.registry,
-                    &self.theme_inputs,
-                    self.mode,
-                    tint_for(self.effect_kind),
-                );
-                out.reload_palette = true;
                 self.remember(|st, app| st.effect = Some(app.effect_kind.to_string()));
             }
             2 => {
@@ -812,7 +799,7 @@ fn empty_answer() -> Zeroizing<String> {
     Zeroizing::new(String::with_capacity(FIELD_MAX + 4))
 }
 
-fn styles_for(registry: &Registry, inputs: &ThemeInputs, mode: ColorMode, tint: Tint) -> Styles {
+fn styles_for(registry: &Registry, inputs: &ThemeInputs, mode: ColorMode) -> Styles {
     let resolved = theme::resolve(registry, inputs);
     tracing::debug!(
         event = "theme.resolved",
@@ -826,17 +813,9 @@ fn styles_for(registry: &Registry, inputs: &ThemeInputs, mode: ColorMode, tint: 
         .get(&resolved.slug)
         .or_else(|| registry.get(theme::DEFAULT_THEME))
     {
-        Some(def) => Styles::tinted(def, mode, tint),
+        Some(def) => Styles::new(def, mode),
         // The registry constructor guarantees the default exists; mono is the safe floor.
-        None => Styles::tinted(&fallback_mono(), mode, tint),
-    }
-}
-
-/// The ramp tint an effect wants: the Matrix rain is green, the rest use the accent.
-fn tint_for(kind: EffectKind) -> Tint {
-    match kind {
-        EffectKind::Matrix => Tint::Success,
-        _ => Tint::Accent,
+        None => Styles::new(&fallback_mono(), mode),
     }
 }
 
@@ -1129,33 +1108,6 @@ mod tests {
         key(&mut app, KeyCode::F(9));
         assert_eq!(trx.try_recv().ok(), Some(Touch::Wrong));
         assert_eq!(trx.try_recv().ok(), Some(Touch::Match));
-    }
-
-    #[test]
-    fn switching_to_matrix_turns_the_ramp_green() {
-        let (mut app, _rx) = app();
-        let before = app.styles.fx.ramp;
-        key(&mut app, KeyCode::F(1));
-        key(&mut app, KeyCode::Down);
-        let mut reloaded = false;
-        for _ in 0..crate::fx::EffectKind::ALL.len() {
-            if app.effect_kind == EffectKind::Matrix {
-                break;
-            }
-            reloaded |= app
-                .on_key(
-                    KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
-                    Instant::now(),
-                )
-                .reload_palette;
-        }
-        assert_eq!(app.effect_kind, EffectKind::Matrix);
-        assert!(reloaded);
-        assert_eq!(
-            app.styles.fx.ramp[4], app.styles.success,
-            "ramp runs through the success token"
-        );
-        assert_ne!(app.styles.fx.ramp, before);
     }
 
     #[test]
