@@ -1,6 +1,6 @@
 # Gantry — agent context
 
-Gantry is a Rust greetd greeter (ratatui + crossterm) for Steelbore OS Bravais. It follows The Steelbore Standard v2.12. The registered name is Gantry; the proposed short code `GTY` is pending.
+Gantry is a Rust greetd greeter (ratatui + crossterm) for Steelbore OS Bravais. It follows The Steelbore Standard v2.12. The registered name is Gantry; its short code is `GNT`.
 
 ## Build and check
 

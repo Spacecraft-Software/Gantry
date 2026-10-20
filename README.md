@@ -4,7 +4,7 @@ Gantry is a themed, animated login greeter for [greetd](https://git.sr.ht/~kenny
 
 Its look takes after [sysc-greet](https://github.com/Nomadcxx/sysc-greet): ASCII-art banners, animated backgrounds, a screensaver, and menus on the F-keys. All of Gantry's code, art and themes are new.
 
-**Status:** v0, pre-release. The design and open questions live in the Gantry PRD.
+**Status:** v0, pre-release. Short code `GNT`. The design and its decisions live in the Gantry PRD.
 
 ## Features
 

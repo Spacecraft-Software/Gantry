@@ -29,11 +29,13 @@ MVP: M0–M3 — Gantry v1.0
 
 ## M2 — Polish
 
-- [ ] P-020 Settle open questions in the PRD
+- [x] P-020 Settle open questions in the PRD
 - [ ] P-021 Fairing hand-off (no blank flash between splash and login)
 - [ ] P-022 Texinfo manual `doc/gantry.texi` (§8)
-- [ ] P-023 Upstream greetd patch to cancel during a scan (optional)
-- [ ] P-024 Concurrent fingerprint-or-password PAM module (optional)
+- [ ] ~~P-023 Upstream greetd patch to cancel during a scan~~ (dropped)
+- [ ] P-024 Concurrent fingerprint-or-password Rust PAM module
+- [ ] P-029 Nickel config and themes evaluated at runtime, with contracts
+- [ ] P-030 `gnt` command alias and registry entry
 
 ## M3 — Release
 
