@@ -36,8 +36,6 @@ pub struct FxPalette {
     pub foreground: Color,
     /// Highlight color.
     pub accent: Color,
-    /// Positive status color.
-    pub success: Color,
 }
 
 /// Which glyph repertoire is safe. `VtSafe` = only ASCII, and these: █ ▀ ▄ ▌ ▐ ░ ▒ ▓ ·
@@ -203,7 +201,6 @@ mod testkit {
             background: Color::Indexed(0),
             foreground: Color::Indexed(15),
             accent: Color::Indexed(11),
-            success: Color::Indexed(10),
         }
     }
 

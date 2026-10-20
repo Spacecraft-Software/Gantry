@@ -5,9 +5,9 @@
 //! Falling digital-rain columns.
 //!
 //! Each column carries one drop. The head is drawn in `foreground`, the next
-//! two cells in `success`, and the rest of the trail fades from `ramp[5]`
-//! down to `ramp[1]` (the app tints the ramp through `success`, so the whole
-//! trail is green). Glyphs follow the film: half-width katakana, digits and a
+//! two cells in `accent`, and the rest of the trail fades from `ramp[5]`
+//! down to `ramp[1]`, so the rain takes the active theme's accent like every
+//! other effect: blue under steelbore-blue, amber under Modern. Glyphs follow the film: half-width katakana, digits and a
 //! few symbols where the font has them; digits and symbols on the console,
 //! plus katakana there too when Gantry loaded them into the console font.
 
@@ -42,7 +42,7 @@ fn kana_glyph(index: u8, extra: &[char]) -> char {
     }
 }
 
-/// Shortest trail, in cells (head plus two `success` cells plus fade).
+/// Shortest trail, in cells (head plus two `accent` cells plus fade).
 const MIN_LEN: i32 = 4;
 
 /// One falling drop.
@@ -132,7 +132,7 @@ impl Matrix {
     fn trail_color(pal: &FxPalette, dist: i32, len: i32) -> Color {
         match dist {
             0 => pal.foreground,
-            1 | 2 => pal.success,
+            1 | 2 => pal.accent,
             _ => {
                 let span = (len - 3).max(1);
                 let step = 5 - (dist - 3) * 5 / span;
@@ -266,5 +266,9 @@ mod tests {
         let drawn = buf.content.iter().filter(|c| c.symbol() != " ").count();
         assert!(drawn > 0);
         assert!(buf.content.iter().any(|c| c.fg == pal.foreground));
+        assert!(
+            buf.content.iter().any(|c| c.fg == pal.accent),
+            "the trail takes the theme accent"
+        );
     }
 }
