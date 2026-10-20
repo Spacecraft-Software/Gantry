@@ -104,7 +104,7 @@ Gantry is a personal hobby project of Spacecraft Software, built for the maintai
 
 - **Component system (§13):** not applicable. Gantry is a terminal UI built on ratatui.
 - **Theme (§11):** Steelbore Modern by default; all 21 registered themes are available. It is dark-only (`light = none`) because a console exposes no colour-scheme preference.
-- **Conformance (§19):** The Steelbore Standard v2.12, Category C (provisional), tailored, pre-release.
+- **Conformance (§19):** The Steelbore Standard v2.12, Category B, with the planned Rust PAM module raised to Category A; tailored, pre-release.
 
 ## License
 
