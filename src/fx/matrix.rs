@@ -6,19 +6,37 @@
 //!
 //! Each column carries one drop. The head is drawn in `foreground`, the next
 //! two cells in `success`, and the rest of the trail fades from `ramp[5]`
-//! down to `ramp[1]`. Glyphs are ASCII plus `·` in both glyph modes.
+//! down to `ramp[1]` (the app tints the ramp through `success`, so the whole
+//! trail is green). Glyphs follow the film: half-width katakana, digits and a
+//! few symbols where the font has them; digits and symbols on the console.
 
 use ratatui::{buffer::Buffer, layout::Rect, style::Color};
 
 use super::rng::Rng;
 use super::{Background, FxPalette, Glyphs, ramp, visible};
 
-/// ASCII rain glyphs. Indices in `GLYPHS.len()..GLYPH_SPAN` draw as `·`.
-const GLYPHS: &[u8] =
-    b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@#$%&*+=-<>?!/\\|:;";
+/// Console rain: the film's digits and symbols, all ASCII.
+const VT_GLYPHS: &[char] = &[
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'Z', ':', '.', '"', '=', '*', '+', '-', '<',
+    '>', '|',
+];
 
-/// Number of distinct glyph indices; the excess over `GLYPHS` maps to `·`.
-const GLYPH_SPAN: u32 = 84;
+/// Unicode rain: half-width katakana (U+FF66..=U+FF9D), digits and symbols.
+/// Every glyph is one cell wide.
+fn unicode_glyph(index: u8) -> char {
+    const KANA: u32 = 0xFF9D - 0xFF66 + 1;
+    const EXTRA: &[char] = &[
+        '0', '1', '2', '3', '4', '5', '7', '8', '9', 'Z', ':', '.', '"', '=', '*', '+', '-', '<',
+        '>', '¦', '|',
+    ];
+    let i = u32::from(index) % (KANA + 21);
+    if i < KANA {
+        char::from_u32(0xFF66 + i).unwrap_or('0')
+    } else {
+        let j = usize::try_from(i - KANA).unwrap_or(0);
+        EXTRA.get(j).copied().unwrap_or('0')
+    }
+}
 
 /// Shortest trail, in cells (head plus two `success` cells plus fade).
 const MIN_LEN: i32 = 4;
@@ -54,13 +72,17 @@ fn rand_i32(rng: &mut Rng, n: u32) -> i32 {
 }
 
 fn random_glyph(rng: &mut Rng) -> u8 {
-    u8::try_from(rng.below(GLYPH_SPAN)).unwrap_or(0)
+    u8::try_from(rng.below(256)).unwrap_or(0)
 }
 
-fn glyph_char(index: u8) -> char {
-    GLYPHS
-        .get(usize::from(index))
-        .map_or('·', |&b| char::from(b))
+fn glyph_char(index: u8, glyphs: Glyphs) -> char {
+    match glyphs {
+        Glyphs::VtSafe => VT_GLYPHS
+            .get(usize::from(index) % VT_GLYPHS.len())
+            .copied()
+            .unwrap_or('0'),
+        Glyphs::Unicode => unicode_glyph(index),
+    }
 }
 
 /// A new drop above the top edge; `initial` staggers drops over a taller span.
@@ -143,7 +165,7 @@ impl Background for Matrix {
         }
     }
 
-    fn render(&self, area: Rect, buf: &mut Buffer, pal: &FxPalette, _glyphs: Glyphs) {
+    fn render(&self, area: Rect, buf: &mut Buffer, pal: &FxPalette, glyphs: Glyphs) {
         let clip = visible(area, buf);
         let cols = usize::from(self.cols);
         for x in clip.left()..clip.right() {
@@ -165,7 +187,7 @@ impl Background for Matrix {
                     continue;
                 };
                 if let Some(cell) = buf.cell_mut((x, y)) {
-                    cell.set_char(glyph_char(g))
+                    cell.set_char(glyph_char(g, glyphs))
                         .set_fg(Self::trail_color(pal, dist, drop.len))
                         .set_bg(pal.background);
                 }
@@ -178,7 +200,7 @@ impl Background for Matrix {
 mod tests {
     use ratatui::layout::Rect;
 
-    use super::{GLYPH_SPAN, GLYPHS, Matrix};
+    use super::{Matrix, VT_GLYPHS, glyph_char};
     use crate::fx::{Glyphs, testkit};
 
     #[test]
@@ -197,9 +219,26 @@ mod tests {
     }
 
     #[test]
-    fn glyph_table_leaves_room_for_dots() {
-        assert!(GLYPHS.is_ascii());
-        assert!(GLYPHS.len() < usize::try_from(GLYPH_SPAN).unwrap_or(0));
+    fn console_glyphs_are_ascii() {
+        assert!(VT_GLYPHS.iter().all(char::is_ascii));
+        assert!((0..=u8::MAX).all(|i| glyph_char(i, Glyphs::VtSafe).is_ascii()));
+    }
+
+    #[test]
+    fn unicode_glyphs_are_single_width_and_mostly_katakana() {
+        let all: Vec<char> = (0..=u8::MAX)
+            .map(|i| glyph_char(i, Glyphs::Unicode))
+            .collect();
+        assert!(
+            all.iter()
+                .all(|c| ratatui::text::Span::raw(c.to_string()).width() == 1),
+            "every glyph fills one cell"
+        );
+        let kana = all
+            .iter()
+            .filter(|c| ('\u{FF66}'..='\u{FF9D}').contains(*c))
+            .count();
+        assert!(kana > all.len() / 2);
     }
 
     #[test]
