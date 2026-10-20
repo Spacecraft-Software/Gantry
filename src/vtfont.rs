@@ -314,13 +314,27 @@ impl Font {
 
 /// How readily a code point's glyph can go (lower first), or `None` when the
 /// login screen may need it.
+///
+/// The kernel's built-in font (CP437, 256 glyphs) has only 43 slots in the
+/// first five groups, so CP437's symbols are spare too: it is the font the
+/// console falls back to when a DRM driver takes over after the configured
+/// font was loaded. Nothing VT-safe (`art::is_vt_safe`) is ever taken, nor
+/// the password mask's bullet.
 fn spare_rank(c: char) -> Option<u8> {
+    if crate::art::is_vt_safe(c) || c == '•' {
+        return None;
+    }
     match u32::from(c) {
-        0x0400..=0x04FF => Some(0),                         // Cyrillic
-        0x0370..=0x03FF => Some(1),                         // Greek
-        0x0180..=0x024F => Some(2),                         // Latin Extended-B
-        0x0100..=0x017F => Some(3),                         // Latin Extended-A
-        0x00C0..=0x00FF if c != '×' && c != '÷' => Some(4), // Latin-1 letters
+        0x0400..=0x04FF => Some(0),                            // Cyrillic
+        0x0370..=0x03FF => Some(1),                            // Greek
+        0x0180..=0x024F => Some(2),                            // Latin Extended-B
+        0x0100..=0x017F => Some(3),                            // Latin Extended-A
+        0x00C0..=0x00FF if c != '×' && c != '÷' => Some(4),    // Latin-1 letters
+        0x2600..=0x26FF => Some(5),                            // ☺ ♥ ♪ ☼ and kin
+        0x2200..=0x22FF | 0x2310 | 0x2320 | 0x2321 => Some(6), // ∞ ≈ √ ⌐ ⌠ ⌡
+        0x00A1 | 0x00AA | 0x00BA | 0x00BC | 0x00BD | 0x00BF | 0x00B2 | 0x207F | 0x20A7 => {
+            Some(7) // ¡ ª º ¼ ½ ¿ ² ⁿ ₧
+        }
         _ => None,
     }
 }
@@ -509,6 +523,35 @@ mod tests {
         // Latin-1 letters are the last resort, so some remain.
         assert!(f.slot_of('é').is_some() || f.slot_of('ÿ').is_some());
         assert_eq!(Font::parse(&f.to_psf2()).expect("parses"), f);
+    }
+
+    /// Code page 437, the kernel's built-in console font: control-range
+    /// glyphs, then ASCII, then the upper half.
+    const CP437_LOW: &str = " ☺☻♥♦♣♠•◘○◙♂♀♪♫☼►◄↕‼¶§▬↨↑↓→←∟↔▲▼";
+    const CP437_HIGH: &str = "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■\u{a0}";
+
+    fn cp437(i: usize) -> Vec<Entry> {
+        let c = match i {
+            0..32 => CP437_LOW.chars().nth(i),
+            32..128 => char::from_u32(u32::try_from(i).expect("u32")),
+            _ => CP437_HIGH.chars().nth(i - 128),
+        };
+        vec![Entry::Char(c.expect("256 code points"))]
+    }
+
+    #[test]
+    fn kernel_font_has_room() {
+        assert_eq!(
+            CP437_LOW.chars().count() + 96 + CP437_HIGH.chars().count(),
+            256
+        );
+        let mut f = font(cp437);
+        f.add_kana().expect("room in CP437");
+        assert!(f.has_kana());
+        for c in (' '..='~').chain("═║╔╗╚╝╠╣╦╩╬─│┌┐└┘├┤┬┴┼█▀▄▌▐░▒▓▲▼►◄·•".chars())
+        {
+            assert!(f.slot_of(c).is_some(), "{c:?} kept");
+        }
     }
 
     #[test]
