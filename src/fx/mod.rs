@@ -49,6 +49,9 @@ pub enum Glyphs {
     VtSafe,
     /// Any glyph a modern terminal font is expected to carry.
     Unicode,
+    /// `VtSafe` plus half-width katakana, which Gantry loaded into the
+    /// console font (see `vtfont`). Only the Matrix rain uses them.
+    VtKana,
 }
 
 /// An animated full-area background.

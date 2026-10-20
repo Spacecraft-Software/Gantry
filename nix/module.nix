@@ -167,6 +167,10 @@ in
       "${sessionDesktops}/share/xsessions"
     ];
 
+    # `general.console_font = true` swaps in a katakana console font while
+    # Gantry runs; it saves, loads and restores fonts through kbd's setfont.
+    services.gantry.settings.general.setfont = mkDefault "${pkgs.kbd}/bin/setfont";
+
     environment.etc."gantry/config.toml".source = configFile;
     environment.systemPackages = [ cfg.package ];
 

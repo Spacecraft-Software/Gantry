@@ -138,6 +138,8 @@ pub struct App {
     mode: ColorMode,
     /// Active colours.
     pub styles: Styles,
+    /// The console font carries half-width katakana (Gantry loaded it).
+    pub vt_kana: bool,
     /// Startable sessions, "Shell" first.
     pub sessions: Vec<Session>,
     /// Selected session index.
@@ -283,6 +285,7 @@ impl App {
             text_fx,
             tick: 0,
             test_mode,
+            vt_kana: false,
             submit_on_prompt: false,
             last_input: now,
             commands,

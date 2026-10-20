@@ -53,6 +53,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
 
 fn glyphs(app: &App) -> Glyphs {
     match app.styles.mode {
+        ColorMode::LinuxVt if app.vt_kana => Glyphs::VtKana,
         ColorMode::LinuxVt => Glyphs::VtSafe,
         ColorMode::TrueColor => Glyphs::Unicode,
     }
@@ -503,7 +504,7 @@ fn vt_sanitize(lines: &[&str], glyphs: Glyphs) -> Vec<String> {
     lines
         .iter()
         .map(|l| match glyphs {
-            Glyphs::VtSafe => l
+            Glyphs::VtSafe | Glyphs::VtKana => l
                 .chars()
                 .map(|c| if crate::art::is_vt_safe(c) { c } else { '?' })
                 .collect(),

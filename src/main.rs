@@ -24,6 +24,7 @@ mod sessions;
 mod state;
 mod theme;
 mod ui;
+mod vtfont;
 
 use std::io::{self, Write as _};
 use std::path::PathBuf;
@@ -226,7 +227,7 @@ fn main() -> anyhow::Result<()> {
         if let Some(w) = cfg_warning.iter().chain(&key_warnings).next() {
             app.status = Some((Level::Warn, w.clone()));
         }
-        go_linear = run_tui(&mut app, &ev_rx)?;
+        go_linear = run_tui(&mut app, &ev_rx, cli.test)?;
     }
     if go_linear {
         let default_user = state.user.as_deref().filter(|_| cfg.general.remember);
@@ -317,8 +318,87 @@ impl Drop for TuiGuard {
     }
 }
 
+/// Puts the original console font back however the UI exits. Release builds
+/// abort on panic, so the panic hook restores it too.
+struct FontGuard {
+    loaded: vtfont::Loaded,
+    /// A test-mode directory to remove afterwards.
+    scratch: Option<std::path::PathBuf>,
+}
+
+impl FontGuard {
+    fn new(loaded: vtfont::Loaded, scratch: Option<std::path::PathBuf>) -> Self {
+        let for_hook = loaded.clone();
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let _ = for_hook.restore();
+            previous(info);
+        }));
+        Self { loaded, scratch }
+    }
+}
+
+impl Drop for FontGuard {
+    fn drop(&mut self) {
+        match self.loaded.restore() {
+            Ok(()) => {
+                if let Some(dir) = &self.scratch {
+                    let _ = std::fs::remove_dir(dir);
+                }
+            }
+            Err(e) => tracing::warn!("could not restore the console font: {e:#}"),
+        }
+    }
+}
+
+/// Where the console font is saved while Gantry runs: next to the cache file,
+/// or (in test mode, as an ordinary user) a private runtime directory.
+fn font_dir(cfg: &Config, test: bool) -> io::Result<std::path::PathBuf> {
+    use std::os::unix::fs::DirBuilderExt as _;
+    if !test && let Some(dir) = cfg.general.cache_file.parent() {
+        return Ok(dir.to_owned());
+    }
+    let base = std::env::var_os("XDG_RUNTIME_DIR").map_or_else(std::env::temp_dir, Into::into);
+    let dir = base.join(format!("gantry-{}", std::process::id()));
+    std::fs::DirBuilder::new().mode(0o700).create(&dir)?;
+    Ok(dir)
+}
+
+/// Loads the katakana console font when asked for and on the Linux console.
+/// Failure only costs the katakana: the rain falls back to digits.
+fn console_font(app: &mut App, test: bool) -> Option<FontGuard> {
+    if !app.cfg.general.console_font || app.styles.mode != ColorMode::LinuxVt {
+        return None;
+    }
+    let loaded = font_dir(&app.cfg, test)
+        .map_err(anyhow::Error::from)
+        .and_then(|dir| Ok((vtfont::load(&app.cfg.general.setfont, &dir)?, dir)));
+    match loaded {
+        Ok((l, dir)) => {
+            app.vt_kana = true;
+            Some(FontGuard::new(l, test.then_some(dir)))
+        }
+        Err(e) => {
+            tracing::warn!("katakana console font not loaded: {e:#}");
+            if app.status.is_none() {
+                app.status = Some((
+                    Level::Warn,
+                    "Console font not loaded; see the log".to_owned(),
+                ));
+            }
+            None
+        }
+    }
+}
+
 /// Runs the full-screen UI. Returns true when the user asked for linear mode.
-fn run_tui(app: &mut App, events: &mpsc::Receiver<auth::Event>) -> anyhow::Result<bool> {
+fn run_tui(
+    app: &mut App,
+    events: &mpsc::Receiver<auth::Event>,
+    test: bool,
+) -> anyhow::Result<bool> {
+    // Declared before the terminal guard, so it drops (restores) after it.
+    let _font = console_font(app, test);
     let (_guard, mut terminal) = TuiGuard::enter(app.styles.mode)?;
     write_palette(app)?;
     let frame = Duration::from_millis(1000 / app::FPS);

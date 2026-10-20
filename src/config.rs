@@ -63,6 +63,11 @@ pub struct General {
     pub cache_file: PathBuf,
     /// Prefix for X11 sessions (greetd does not start an X server itself).
     pub xsession_wrapper: Vec<String>,
+    /// On the Linux console, load a copy of the console font with half-width
+    /// katakana while Gantry runs (for the Matrix rain). Off by default.
+    pub console_font: bool,
+    /// kbd's `setfont`, used to save, patch-load and restore the console font.
+    pub setfont: PathBuf,
 }
 
 impl Default for General {
@@ -76,6 +81,8 @@ impl Default for General {
             text_effect: TextFxKind::Typewriter,
             animations: true,
             cache_file: PathBuf::from("/var/cache/gantry/state.toml"),
+            console_font: false,
+            setfont: PathBuf::from("setfont"),
         }
     }
 }
@@ -256,6 +263,20 @@ mod tests {
         assert_eq!(cfg.general.effect, EffectKind::Fire);
         assert_eq!(cfg.screensaver.idle_timeout, Duration::from_secs(90));
         assert_eq!(cfg.general.greeting, "Steelbore OS Bravais");
+    }
+
+    #[test]
+    fn console_font_is_opt_in() {
+        assert!(!Config::default().general.console_font);
+        let cfg: Config = toml::from_str(
+            "[general]\nconsole_font = true\nsetfont = \"/run/current-system/sw/bin/setfont\"\n",
+        )
+        .expect("parses");
+        assert!(cfg.general.console_font);
+        assert_eq!(
+            cfg.general.setfont,
+            PathBuf::from("/run/current-system/sw/bin/setfont")
+        );
     }
 
     #[test]

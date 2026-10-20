@@ -7,3 +7,9 @@ path = ["*.md", "Cargo.lock", "flake.lock", ".gitignore", ".gitattributes", ".ed
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Mohamed Hammad <Mohamed.Hammad@SpacecraftSoftware.org>"
 SPDX-License-Identifier = "GPL-3.0-or-later"
+
+[[annotations]]
+path = ["assets/katakana-8x16.hex"]
+precedence = "override"
+SPDX-FileCopyrightText = "1998-2023 Roman Czyborra, Paul Hardy and the GNU Unifont contributors"
+SPDX-License-Identifier = "GPL-2.0-or-later"

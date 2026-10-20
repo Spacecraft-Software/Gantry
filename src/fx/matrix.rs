@@ -8,7 +8,8 @@
 //! two cells in `success`, and the rest of the trail fades from `ramp[5]`
 //! down to `ramp[1]` (the app tints the ramp through `success`, so the whole
 //! trail is green). Glyphs follow the film: half-width katakana, digits and a
-//! few symbols where the font has them; digits and symbols on the console.
+//! few symbols where the font has them; digits and symbols on the console,
+//! plus katakana there too when Gantry loaded them into the console font.
 
 use ratatui::{buffer::Buffer, layout::Rect, style::Color};
 
@@ -21,20 +22,23 @@ const VT_GLYPHS: &[char] = &[
     '>', '|',
 ];
 
-/// Unicode rain: half-width katakana (U+FF66..=U+FF9D), digits and symbols.
-/// Every glyph is one cell wide.
-fn unicode_glyph(index: u8) -> char {
+/// Symbols mixed into the katakana in Unicode mode.
+const UNICODE_EXTRA: &[char] = &[
+    '0', '1', '2', '3', '4', '5', '7', '8', '9', 'Z', ':', '.', '"', '=', '*', '+', '-', '<', '>',
+    '¦', '|',
+];
+
+/// Half-width katakana (U+FF66..=U+FF9D) mixed with `extra`. Every glyph is
+/// one cell wide.
+fn kana_glyph(index: u8, extra: &[char]) -> char {
     const KANA: u32 = 0xFF9D - 0xFF66 + 1;
-    const EXTRA: &[char] = &[
-        '0', '1', '2', '3', '4', '5', '7', '8', '9', 'Z', ':', '.', '"', '=', '*', '+', '-', '<',
-        '>', '¦', '|',
-    ];
-    let i = u32::from(index) % (KANA + 21);
+    let extra_len = u32::try_from(extra.len()).unwrap_or(0);
+    let i = u32::from(index) % (KANA + extra_len);
     if i < KANA {
         char::from_u32(0xFF66 + i).unwrap_or('0')
     } else {
         let j = usize::try_from(i - KANA).unwrap_or(0);
-        EXTRA.get(j).copied().unwrap_or('0')
+        extra.get(j).copied().unwrap_or('0')
     }
 }
 
@@ -81,7 +85,8 @@ fn glyph_char(index: u8, glyphs: Glyphs) -> char {
             .get(usize::from(index) % VT_GLYPHS.len())
             .copied()
             .unwrap_or('0'),
-        Glyphs::Unicode => unicode_glyph(index),
+        Glyphs::VtKana => kana_glyph(index, VT_GLYPHS),
+        Glyphs::Unicode => kana_glyph(index, UNICODE_EXTRA),
     }
 }
 
@@ -222,6 +227,18 @@ mod tests {
     fn console_glyphs_are_ascii() {
         assert!(VT_GLYPHS.iter().all(char::is_ascii));
         assert!((0..=u8::MAX).all(|i| glyph_char(i, Glyphs::VtSafe).is_ascii()));
+    }
+
+    #[test]
+    fn console_kana_mode_adds_only_kana() {
+        let all: Vec<char> = (0..=u8::MAX)
+            .map(|i| glyph_char(i, Glyphs::VtKana))
+            .collect();
+        assert!(
+            all.iter()
+                .all(|c| c.is_ascii() || ('\u{FF66}'..='\u{FF9D}').contains(c))
+        );
+        assert!(all.iter().any(|c| !c.is_ascii()));
     }
 
     #[test]

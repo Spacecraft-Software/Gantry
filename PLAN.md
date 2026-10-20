@@ -35,6 +35,7 @@ MVP: M0–M3 — Gantry v1.0
 - [ ] ~~P-023 Upstream greetd patch to cancel during a scan~~ (dropped)
 - [ ] P-024 Concurrent fingerprint-or-password Rust PAM module
 - [ ] P-029 Nickel config and themes evaluated at runtime, with contracts
+- [x] P-031 Katakana Matrix rain on the Linux console (patched console font, restored on exit)
 - [ ] P-030 `gnt` command alias and registry entry
 
 ## M3 — Release

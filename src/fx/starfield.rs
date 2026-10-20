@@ -74,7 +74,7 @@ fn look(f: f32, pal: &FxPalette, glyphs: Glyphs) -> (char, Color) {
         f if f > 0.08 => ('*', ramp(pal, 7)),
         _ => match glyphs {
             Glyphs::Unicode => ('✦', pal.foreground),
-            Glyphs::VtSafe => ('*', pal.foreground),
+            Glyphs::VtSafe | Glyphs::VtKana => ('*', pal.foreground),
         },
     }
 }
