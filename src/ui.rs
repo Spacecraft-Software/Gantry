@@ -41,6 +41,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
         draw_screensaver(frame, app, area);
     } else {
         draw_login(frame, app, area);
+        draw_clock(frame, app, area);
         if let Some(panel) = app.panel {
             draw_panel(frame, app, panel, area);
         }
@@ -535,6 +536,30 @@ fn mask(n: usize, mode: ColorMode) -> String {
     std::iter::repeat_n(dot, n.min(32)).collect()
 }
 
+/// The login-screen clock text for `now`. A bad `clock_format` falls back to
+/// the default rather than leaving the line empty.
+fn clock_text(format: &str, now: &jiff::Zoned) -> String {
+    jiff::fmt::strtime::format(format, now)
+        .or_else(|_bad_format| jiff::fmt::strtime::format(crate::config::DEFAULT_CLOCK_FORMAT, now))
+        .unwrap_or_default()
+}
+
+/// Local date and time with the UTC offset, centred on the top row.
+fn draw_clock(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    if !app.cfg.general.clock || area.height < 3 {
+        return;
+    }
+    let s = &app.styles;
+    let text = clock_text(&app.cfg.general.clock_format, &jiff::Zoned::now());
+    let row = Rect { height: 1, ..area };
+    clear_band(frame.buffer_mut(), row, text_width(&text), s.background);
+    frame.render_widget(
+        Paragraph::new(Span::styled(text, Style::default().fg(s.foreground)))
+            .alignment(Alignment::Center),
+        row,
+    );
+}
+
 fn hostname() -> String {
     std::fs::read_to_string("/proc/sys/kernel/hostname")
         .map(|h| h.trim().to_owned())
@@ -606,6 +631,82 @@ mod tests {
         assert!(t.contains("Session"));
         assert!(t.contains("Shell"));
         assert!(t.contains("F12"));
+    }
+
+    #[test]
+    fn clock_shows_the_utc_offset_on_the_top_row() {
+        let buf = render(ColorMode::TrueColor, 100, 32, |_| {});
+        let top: String = buf.content[..100]
+            .iter()
+            .map(ratatui::buffer::Cell::symbol)
+            .collect();
+        assert!(top.contains("UTC+") || top.contains("UTC-"), "{top:?}");
+        let off = render(ColorMode::TrueColor, 100, 32, |a| {
+            a.cfg.general.clock = false;
+        });
+        let top: String = off.content[..100]
+            .iter()
+            .map(ratatui::buffer::Cell::symbol)
+            .collect();
+        assert!(!top.contains("UTC"));
+    }
+
+    #[test]
+    fn clock_format_falls_back_and_keeps_the_offset() {
+        let now: jiff::Zoned = "2026-10-21T07:40:00+03:00[Asia/Bahrain]"
+            .parse()
+            .expect("zoned");
+        assert_eq!(
+            super::clock_text(crate::config::DEFAULT_CLOCK_FORMAT, &now),
+            "Wed 21 Oct 2026  07:40  UTC+03:00"
+        );
+        assert_eq!(
+            super::clock_text("bad %", &now),
+            "Wed 21 Oct 2026  07:40  UTC+03:00"
+        );
+    }
+
+    /// Frame cost per effect on a 1080p console (240x67 cells). Run with
+    /// `cargo test --release frame_cost -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "measurement, not a check"]
+    fn frame_cost() {
+        let (w, h) = (240, 67);
+        for effect in crate::fx::EffectKind::ALL {
+            let (tx, _rx) = mpsc::channel();
+            let mut cfg = Config::default();
+            cfg.general.effect = effect;
+            let (keymap, _) = Keymap::new(&KeyConfig::default());
+            let mut app = App::new(AppInit {
+                sessions: vec![],
+                cfg,
+                keymap,
+                registry: Registry::embedded().expect("palette"),
+                theme_inputs: ThemeInputs::default(),
+                mode: ColorMode::LinuxVt,
+                users: vec![],
+                state: State::default(),
+                commands: tx,
+                test_mode: true,
+                screensaver: false,
+                now: Instant::now(),
+                touches: None,
+            });
+            let mut term = Terminal::new(TestBackend::new(w, h)).expect("test terminal");
+            let frames = 600_u32;
+            let start = Instant::now();
+            let mut worst = std::time::Duration::ZERO;
+            for _ in 0..frames {
+                let t = Instant::now();
+                app.on_tick(Instant::now(), Rect::new(0, 0, w, h));
+                term.draw(|f| draw(f, &app)).expect("draw");
+                worst = worst.max(t.elapsed());
+            }
+            eprintln!(
+                "{effect:?}: mean {:?}, worst {worst:?} per frame",
+                start.elapsed() / frames
+            );
+        }
     }
 
     #[test]

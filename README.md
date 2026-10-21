@@ -76,6 +76,8 @@ text_effect = "typewriter"  # typewriter | beams | none
 animations = true
 remember = true
 console_font = false        # true: katakana Matrix rain on the Linux console
+clock = true                # local date and time on the top row
+clock_format = "%a %d %b %Y  %H:%M  UTC%:z"
 
 [theme]
 name = "steelbore"
@@ -99,6 +101,16 @@ Per-session banners go in `art_dir`, one file per session: `<session>.toml` with
 - **No `unsafe`.** `#![forbid(unsafe_code)]`. Caps Lock is read from sysfs LEDs rather than an ioctl.
 - **Katakana on the console.** With `console_font = true`, Gantry saves the console font with `setfont -O`, loads a copy in which the 56 half-width katakana (from GNU Unifont, scaled to the font's size) replace glyphs the login screen can spare (Cyrillic, Greek, accented Latin, then code page 437's symbols such as ☺ ♪ ∞ ½, so the kernel's built-in font has room too), and loads the original back on exit. The saved copy stays in `/var/cache/gantry` until then, so a killed greeter is put right on its next start. On a 256-glyph font the spare glyphs can include accented Latin letters, which show as katakana while Gantry runs; if a font has no room, the rain keeps to digits and symbols and the status line says why.
 - **Skip key for fingerprint scans.** greetd holds a lock while PAM waits for the sensor, so a greeter cannot cancel a scan. Gantry relies on type-ahead and a short `pam_fprintd` timeout (10 s via the module) instead.
+
+## Budgets
+
+Steelbore Standard §22. Gantry draws at 30 frames a second while something moves and wakes twice a second when the screen is still.
+
+| Budget | Bound | Measured |
+|---|---|---|
+| Frame cost, 1080p console (240×67 cells), any effect | mean ≤ 4 ms, worst ≤ 8 ms | mean 0.3–1.1 ms, worst 2.8 ms (Fire), `cargo test --release frame_cost -- --ignored --nocapture` |
+| Idle wake-ups, still screen | ≤ 2 per second | 2 per second, by construction |
+| Idle CPU on the reference machine (ThinkPad T490s) | no visible load | confirmed on the T490s, 2026-10-21 |
 
 ## Project Posture
 

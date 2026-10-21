@@ -21,11 +21,11 @@ MVP: M0–M3 — Gantry v1.0
 
 ## M1 — Validation on Bravais
 
-- [ ] P-015 Run on a real VT: palette, glyphs, Caps Lock LED
+- [x] P-015 Run on a real VT: palette, glyphs, Caps Lock LED
 - [ ] P-016 Fingerprint flow on the T490s sensor
 - [ ] P-017 Kiosk mode under niri + Alacritty
 - [ ] P-018 Speakup read-through of accessible mode (§18.4)
-- [ ] P-019 Measure frame cost and idle CPU; set §22 budgets
+- [x] P-019 Measure frame cost and idle CPU; set §22 budgets (README, Budgets)
 
 ## M2 — Polish
 
@@ -36,6 +36,7 @@ MVP: M0–M3 — Gantry v1.0
 - [ ] P-024 Concurrent fingerprint-or-password Rust PAM module
 - [ ] P-029 Nickel config and themes evaluated at runtime, with contracts
 - [x] P-031 Katakana Matrix rain on the Linux console (patched console font, restored on exit)
+- [x] P-032 Login-screen clock with the UTC offset (tuigreet parity)
 - [ ] P-030 `gnt` command alias and registry entry
 
 ## M3 — Release

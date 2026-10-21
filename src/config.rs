@@ -44,6 +44,10 @@ pub struct Config {
 /// `[general]`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "one field per independent config switch"
+)]
 pub struct General {
     /// Line shown above the login box.
     pub greeting: String,
@@ -68,7 +72,14 @@ pub struct General {
     pub console_font: bool,
     /// kbd's `setfont`, used to save, patch-load and restore the console font.
     pub setfont: PathBuf,
+    /// Show the local date and time, with its UTC offset, on the login screen.
+    pub clock: bool,
+    /// `strftime` format of that clock (jiff's dialect).
+    pub clock_format: String,
 }
+
+/// Default login-screen clock: local time with its UTC offset.
+pub const DEFAULT_CLOCK_FORMAT: &str = "%a %d %b %Y  %H:%M  UTC%:z";
 
 impl Default for General {
     fn default() -> Self {
@@ -83,6 +94,8 @@ impl Default for General {
             cache_file: PathBuf::from("/var/cache/gantry/state.toml"),
             console_font: false,
             setfont: PathBuf::from("setfont"),
+            clock: true,
+            clock_format: DEFAULT_CLOCK_FORMAT.to_owned(),
         }
     }
 }
@@ -263,6 +276,15 @@ mod tests {
         assert_eq!(cfg.general.effect, EffectKind::Fire);
         assert_eq!(cfg.screensaver.idle_timeout, Duration::from_secs(90));
         assert_eq!(cfg.general.greeting, "Steelbore OS Bravais");
+    }
+
+    #[test]
+    fn clock_is_on_with_the_utc_offset() {
+        let cfg = Config::default();
+        assert!(cfg.general.clock);
+        assert!(cfg.general.clock_format.contains("UTC%:z"));
+        let off: Config = toml::from_str("[general]\nclock = false\n").expect("parses");
+        assert!(!off.general.clock);
     }
 
     #[test]
