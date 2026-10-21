@@ -364,27 +364,67 @@ fn font_dir(cfg: &Config, test: bool) -> io::Result<std::path::PathBuf> {
     Ok(dir)
 }
 
-/// Loads the katakana console font when asked for and on the Linux console.
-/// Failure only costs the katakana: the rain falls back to digits.
-fn console_font(app: &mut App, test: bool) -> Option<FontGuard> {
-    if !app.cfg.general.console_font || app.styles.mode != ColorMode::LinuxVt {
-        return None;
-    }
-    let loaded = font_dir(&app.cfg, test)
-        .map_err(anyhow::Error::from)
-        .and_then(|dir| Ok((vtfont::load(&app.cfg.general.setfont, &dir)?, dir)));
-    match loaded {
-        Ok((l, dir)) => {
-            app.vt_kana = true;
-            Some(FontGuard::new(l, test.then_some(dir)))
+/// How long Gantry keeps trying to load the katakana console font.
+///
+/// Under a quiet boot the kernel defers the framebuffer console's takeover
+/// until something is printed, so a greeter that starts on a fresh VT finds
+/// it still on the dummy console, which has no font at all: `setfont` fails
+/// with ENOSYS ("Function not implemented"). The first frame Gantry draws
+/// triggers the takeover, which then runs from a kernel work queue, so the
+/// font is loaded after that frame and retried until the console is ready.
+const FONT_WINDOW: Duration = Duration::from_secs(3);
+/// Pause between font attempts.
+const FONT_RETRY: Duration = Duration::from_millis(200);
+
+/// Loading the katakana console font, which waits until the first frame.
+struct FontLoader {
+    /// When to try next; `None` once loaded, failed for good, or not wanted.
+    next: Option<Instant>,
+    /// When to stop retrying.
+    deadline: Instant,
+}
+
+impl FontLoader {
+    /// Wants the font only when asked for and on the Linux console.
+    fn new(app: &App, now: Instant) -> Self {
+        let wanted = app.cfg.general.console_font && app.styles.mode == ColorMode::LinuxVt;
+        Self {
+            next: wanted.then_some(now),
+            deadline: now + FONT_WINDOW,
         }
-        Err(e) => {
-            tracing::warn!("katakana console font not loaded: {e:#}");
-            if app.status.is_none() {
-                // No log file unless --log is given, so the reason goes on screen.
-                app.status = Some((Level::Warn, format!("Katakana font not loaded: {e}")));
+    }
+
+    /// Tries once when due. Failure only costs the katakana: the rain falls
+    /// back to digits, and the reason goes on screen once retrying is over.
+    fn poll(&mut self, app: &mut App, test: bool, now: Instant) -> Option<FontGuard> {
+        if self.next.is_none_or(|due| now < due) {
+            return None;
+        }
+        let loaded = font_dir(&app.cfg, test)
+            .map_err(anyhow::Error::from)
+            .and_then(|dir| Ok((vtfont::load(&app.cfg.general.setfont, &dir)?, dir)));
+        match loaded {
+            Ok((l, dir)) => {
+                self.next = None;
+                app.vt_kana = true;
+                Some(FontGuard::new(l, test.then_some(dir)))
             }
-            None
+            // A font with no room will not get any; anything else may be the
+            // console not taken over yet.
+            Err(e) if e.downcast_ref::<vtfont::PsfError>().is_none() && now < self.deadline => {
+                tracing::debug!("katakana console font not loaded yet: {e:#}");
+                self.next = Some(now + FONT_RETRY);
+                None
+            }
+            Err(e) => {
+                self.next = None;
+                tracing::warn!("katakana console font not loaded: {e:#}");
+                if app.status.is_none() {
+                    // No log file unless --log is given, so the reason goes on screen.
+                    app.status = Some((Level::Warn, format!("Katakana font not loaded: {e}")));
+                }
+                None
+            }
         }
     }
 }
@@ -396,7 +436,8 @@ fn run_tui(
     test: bool,
 ) -> anyhow::Result<bool> {
     // Declared before the terminal guard, so it drops (restores) after it.
-    let _font = console_font(app, test);
+    let mut _font: Option<FontGuard> = None;
+    let mut font_loader = FontLoader::new(app, Instant::now());
     // The palette goes in before the terminal's first clear, so that clear
     // already paints Gantry's canvas. Fairing leaves the console on the same
     // canvas at the greetd handoff (its `--handoff-console`), so the screen
@@ -421,6 +462,9 @@ fn run_tui(
                 return Ok(false);
             }
             terminal.draw(|f| ui::draw(f, app))?;
+            if let Some(guard) = font_loader.poll(app, test, Instant::now()) {
+                _font = Some(guard);
+            }
             // Full rate only while something moves; a still screen wakes twice a second.
             next = now + if app.is_animating() { frame } else { slow };
         }
