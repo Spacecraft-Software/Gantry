@@ -382,6 +382,8 @@ struct FontLoader {
     next: Option<Instant>,
     /// When to stop retrying.
     deadline: Instant,
+    /// Where the font is saved, made once and kept across attempts.
+    dir: Option<std::path::PathBuf>,
 }
 
 impl FontLoader {
@@ -391,6 +393,7 @@ impl FontLoader {
         Self {
             next: wanted.then_some(now),
             deadline: now + FONT_WINDOW,
+            dir: None,
         }
     }
 
@@ -400,14 +403,18 @@ impl FontLoader {
         if self.next.is_none_or(|due| now < due) {
             return None;
         }
-        let loaded = font_dir(&app.cfg, test)
+        let dir = match &self.dir {
+            Some(dir) => Ok(dir.clone()),
+            None => font_dir(&app.cfg, test).inspect(|dir| self.dir = Some(dir.clone())),
+        };
+        let loaded = dir
             .map_err(anyhow::Error::from)
-            .and_then(|dir| Ok((vtfont::load(&app.cfg.general.setfont, &dir)?, dir)));
+            .and_then(|dir| vtfont::load(&app.cfg.general.setfont, &dir));
         match loaded {
-            Ok((l, dir)) => {
+            Ok(l) => {
                 self.next = None;
                 app.vt_kana = true;
-                Some(FontGuard::new(l, test.then_some(dir)))
+                Some(FontGuard::new(l, self.dir.take().filter(|_| test)))
             }
             // A font with no room will not get any; anything else may be the
             // console not taken over yet.
@@ -418,6 +425,9 @@ impl FontLoader {
             }
             Err(e) => {
                 self.next = None;
+                if let Some(dir) = self.dir.take().filter(|_| test) {
+                    let _ = std::fs::remove_dir(dir);
+                }
                 tracing::warn!("katakana console font not loaded: {e:#}");
                 if app.status.is_none() {
                     // No log file unless --log is given, so the reason goes on screen.
