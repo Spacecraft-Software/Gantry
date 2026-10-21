@@ -653,9 +653,9 @@ mod tests {
 
     #[test]
     fn clock_format_falls_back_and_keeps_the_offset() {
-        let now: jiff::Zoned = "2026-10-21T07:40:00+03:00[Asia/Bahrain]"
-            .parse()
-            .expect("zoned");
+        // A fixed-offset zone, not a named one: a named zone needs a time
+        // zone database, and the Nix build sandbox has none.
+        let now: jiff::Zoned = "2026-10-21T07:40:00+03:00[+03:00]".parse().expect("zoned");
         assert_eq!(
             super::clock_text(crate::config::DEFAULT_CLOCK_FORMAT, &now),
             "Wed 21 Oct 2026  07:40  UTC+03:00"
