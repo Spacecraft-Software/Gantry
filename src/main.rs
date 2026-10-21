@@ -397,8 +397,14 @@ fn run_tui(
 ) -> anyhow::Result<bool> {
     // Declared before the terminal guard, so it drops (restores) after it.
     let _font = console_font(app, test);
-    let (_guard, mut terminal) = TuiGuard::enter(app.styles.mode)?;
+    // The palette goes in before the terminal's first clear, so that clear
+    // already paints Gantry's canvas. Fairing leaves the console on the same
+    // canvas at the greetd handoff (its `--handoff-console`), so the screen
+    // goes from the splash to the login box with no black frame between.
+    let mode = app.styles.mode;
     write_palette(app)?;
+    let (_guard, mut terminal) =
+        TuiGuard::enter(mode).inspect_err(|_failed| reset_palette(mode))?;
     let frame = Duration::from_millis(1000 / app::FPS);
     let slow = Duration::from_millis(500);
     let mut next = Instant::now();

@@ -30,7 +30,7 @@ MVP: M0–M3 — Gantry v1.0
 ## M2 — Polish
 
 - [x] P-020 Settle open questions in the PRD
-- [ ] P-021 Fairing hand-off (no blank flash between splash and login)
+- [ ] P-021 Fairing hand-off (no blank flash between splash and login): Gantry sets its palette before the first clear; Fairing paints greetd's console with the canvas at the handoff (Fairing PR #11, FRN-SRS-106); open until checked on the T490s
 - [ ] P-022 Texinfo manual `doc/gantry.texi` (§8)
 - [ ] ~~P-023 Upstream greetd patch to cancel during a scan~~ (dropped)
 - [ ] P-024 Concurrent fingerprint-or-password Rust PAM module
