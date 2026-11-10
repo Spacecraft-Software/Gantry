@@ -36,6 +36,9 @@ MVP: M0–M3 — Gantry v1.0
 - [ ] P-024 Concurrent fingerprint-or-password Rust PAM module
 - [ ] P-029 Nickel config and themes evaluated at runtime, with contracts
 - [ ] P-030 `gnt` command alias and registry entry
+- [x] P-031 CLI Standard surface: noun-verb, envelope, structured errors, `schema`, `describe`, `SKILL.md`
+- [x] P-032 Terminal protocols: kitty keyboard, OSC 9;4 progress, gate, probe, restore, overrides
+- [x] P-033 Accessibility audit: GTK hint parse, reserved screen-reader chords
 
 ## M3 — Release
 
