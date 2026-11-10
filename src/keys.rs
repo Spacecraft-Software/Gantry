@@ -136,7 +136,7 @@ pub struct ChordError(String);
 
 impl fmt::Display for ChordError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "unknown key chord {:?}", self.0)
+        write!(f, "invalid key chord {:?}", self.0)
     }
 }
 
@@ -157,6 +157,13 @@ impl FromStr for Chord {
                 "shift" => mods.insert(KeyModifiers::SHIFT),
                 _ => return Err(err()),
             }
+        }
+        // Ctrl+Option is VoiceOver's modifier (Standard §10); Insert and
+        // CapsLock, NVDA's and Orca's, have no name here, so they cannot be bound.
+        if mods.contains(KeyModifiers::CONTROL | KeyModifiers::ALT) {
+            return Err(ChordError(format!(
+                "{s} (Ctrl+Alt is reserved for screen readers)"
+            )));
         }
         let lower = key.to_ascii_lowercase();
         let code = match lower.as_str() {
@@ -302,6 +309,14 @@ mod tests {
             Some(Action::PowerMenu)
         );
         assert_eq!(map.action(&ev(KeyCode::F(12), KeyModifiers::NONE)), None);
+    }
+
+    #[test]
+    fn screen_reader_chords_cannot_be_bound() {
+        let _ = "Ctrl+Alt+x".parse::<Chord>().unwrap_err();
+        let _ = "Insert".parse::<Chord>().unwrap_err();
+        let _ = "CapsLock".parse::<Chord>().unwrap_err();
+        let _ = "Ctrl+x".parse::<Chord>().unwrap();
     }
 
     #[test]

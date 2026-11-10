@@ -38,6 +38,9 @@ MVP: M0–M3 — Gantry v1.0
 - [x] P-031 Katakana Matrix rain on the Linux console (patched console font, restored on exit)
 - [x] P-032 Login-screen clock with the UTC offset (tuigreet parity)
 - [ ] P-030 `gnt` command alias and registry entry
+- [x] P-033 CLI Standard surface: noun-verb, envelope, structured errors, `schema`, `describe`, `SKILL.md`
+- [x] P-034 Terminal protocols: kitty keyboard, OSC 9;4 progress, gate, probe, restore, overrides
+- [x] P-035 Accessibility audit: GTK hint parse, reserved screen-reader chords
 
 ## M3 — Release
 
