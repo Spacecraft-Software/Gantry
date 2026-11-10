@@ -29,6 +29,8 @@ pub struct Config {
     pub accessibility: Accessibility,
     /// Idle screensaver.
     pub screensaver: Screensaver,
+    /// Terminal protocol probing.
+    pub terminal: Terminal,
     /// Fingerprint prompts from `pam_fprintd`.
     pub fingerprint: Fingerprint,
     /// Power menu commands.
@@ -114,6 +116,25 @@ pub struct ThemeSection {
 pub struct Accessibility {
     /// Turn accessible mode on from config.
     pub enabled: Option<bool>,
+}
+
+/// `[terminal]`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Terminal {
+    /// How long the startup probe waits for the terminal's replies, as an
+    /// ISO 8601 duration (`PT0.2S`). A terminal that answers nothing delays
+    /// the login screen by this much, once.
+    #[serde(with = "iso_duration")]
+    pub probe_timeout: Duration,
+}
+
+impl Default for Terminal {
+    fn default() -> Self {
+        Self {
+            probe_timeout: crate::termproto::DEFAULT_PROBE_TIMEOUT,
+        }
+    }
 }
 
 /// `[screensaver]`.
@@ -311,6 +332,15 @@ mod tests {
     fn negative_duration_is_rejected() {
         let err = parse_iso_duration("-PT5M").unwrap_err();
         assert!(err.contains("-PT5M"));
+    }
+
+    #[test]
+    fn probe_timeout_defaults_and_parses_fractions() {
+        let cfg: Config = toml::from_str("").expect("empty config parses");
+        assert_eq!(cfg.terminal.probe_timeout, Duration::from_millis(200));
+        let cfg: Config =
+            toml::from_str("[terminal]\nprobe_timeout = \"PT0.5S\"").expect("fraction parses");
+        assert_eq!(cfg.terminal.probe_timeout, Duration::from_millis(500));
     }
 
     #[test]

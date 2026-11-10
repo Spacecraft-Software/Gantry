@@ -21,8 +21,19 @@ Its look takes after [sysc-greet](https://github.com/Nomadcxx/sysc-greet): ASCII
 cargo run -- --test                      # simulated greetd; any password but "fail" works
 cargo run -- --test --test-fingerprint   # simulated reader; users named *finger* match
 cargo run -- --test --accessible         # linear accessible mode
-cargo run -- sessions --json             # non-interactive session list
+cargo run -- session list --json        # non-interactive session list
+cargo run -- user list --fields name,uid # users, only these fields
+cargo run -- describe                    # capability manifest for agents
+cargo run -- schema session list         # JSON Schema for one command
 ```
+
+## Command line
+
+`session list`, `user list`, `schema` and `describe` follow the Spacecraft CLI Standard: text on a terminal, a JSON envelope when piped or when an agent variable (`AI_AGENT`, `AGENT`, `CI`) is set, `--format json|jsonl|csv`, `--fields`, `--print0`. Errors are one JSON line on stderr with an exit code and a runnable `hint`. Run `gantry schema` for the details, or see [SKILL.md](SKILL.md).
+
+## Terminal protocols
+
+Inside a modern terminal (kiosk mode) Gantry uses the kitty keyboard protocol, probed at startup, and OSC 9;4 taskbar progress on terminals known to support it. The Linux console gets neither. Override with `--term-protocols=-keyboard,+progress` or `SPACECRAFT_TERM_PROTOCOLS`; `gantry describe` shows what is in force.
 
 ## Keys
 
