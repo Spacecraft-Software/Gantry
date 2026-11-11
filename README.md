@@ -104,7 +104,7 @@ type_ahead = true
 power_menu = ["F12", "Ctrl+q"]
 ```
 
-**Branding.** On Steelbore OS (`ID=steelbore` in `/etc/os-release`) the banner is the Steelbore logo, drawn in half-blocks, and the accessible-mode title reads "Steelbore OS". On a screen too short for the logo, the name "STEELBORE OS" takes its place. Elsewhere the banner is Gantry's own. `brand = "steelbore"` or `"gantry"` forces one. The art in `assets/steelbore-*.txt` is the Steelbore logo and is licensed CC BY-SA 4.0 (the code stays GPL-3.0-or-later). It is made from the SVG by `tools/logo2art.py` (needs `rsvg-convert` and ImageMagick).
+**Branding.** On Steelbore OS (`ID=steelbore` in `/etc/os-release`) the banner is the Steelbore logo, drawn in half-blocks, and the accessible-mode title reads "Steelbore OS". On a screen too short for the logo, the name "STEELBORE OS" takes its place. Elsewhere the banner is Gantry's own. `brand = "steelbore"` or `"gantry"` forces one. The art in `assets/steelbore-*.txt` is the Steelbore logo and is licensed CC BY-SA 4.0 (the code stays GPL-3.0-or-later). It is made from the SVG by `tools/logo2art.py` (needs `rsvg-convert` and ImageMagick). Using the names and the logo as a brand is covered by [TRADEMARKS.md](TRADEMARKS.md).
 
 Per-session banners go in `art_dir`, one file per session: `<session>.toml` with `description = "..."` and `variants = ["""..."""]`.
 

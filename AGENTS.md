@@ -27,7 +27,8 @@ Gantry is a Rust greetd greeter (ratatui + crossterm) for Steelbore OS Bravais. 
 - Colours come only from theme roles. Never hard-code a hex value.
 - Every status line carries a text tag (`[ERROR]`, `[WARN]`, `[INFO]`, `[OK]`).
 - Art and glyphs must be VT-safe: ASCII, CP437 box drawing and blocks (see `art::is_vt_safe`).
-- Every file starts with the two SPDX lines (GPL-3.0-or-later).
+- Every file starts with the two SPDX lines (GPL-3.0-or-later). The exceptions are the Steelbore logo art and `TRADEMARKS.md`, which are CC-BY-SA-4.0 through `REUSE.toml`.
+- Names and logos are covered by `TRADEMARKS.md`. Do not use the Steelbore marks for a new product or package name without the maintainer's say-so.
 - Commits are signed through the host's existing setup. Never push or open a PR outside `Spacecraft-Software` / `UnbreakableMJ` without the maintainer's explicit approval.
 
 ## CLI surface (CLI Standard v1.1.0)
