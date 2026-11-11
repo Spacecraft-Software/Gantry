@@ -183,7 +183,13 @@ impl Default for Fingerprint {
             enabled: true,
             type_ahead: true,
             scanning: v(&["place your", "swipe your"]),
-            retry: v(&["failed to match"]),
+            retry: v(&[
+                "failed to match",
+                "again",
+                "too short",
+                "not centered",
+                "remove your finger",
+            ]),
             timeout: v(&["verification timed out"]),
             failure: v(&["unknown error", "protocol error"]),
         }

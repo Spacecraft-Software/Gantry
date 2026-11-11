@@ -63,6 +63,17 @@ mod tests {
                 Some(Signal::Scanning),
             ),
             ("Failed to match fingerprint", Some(Signal::Retry)),
+            ("Swipe your finger again", Some(Signal::Retry)),
+            ("Place your finger on the reader again", Some(Signal::Retry)),
+            ("Swipe was too short, try again", Some(Signal::Retry)),
+            (
+                "Your finger was not centered, try swiping your finger again",
+                Some(Signal::Retry),
+            ),
+            (
+                "Remove your finger, and try swiping your finger again",
+                Some(Signal::Retry),
+            ),
             ("Verification timed out", Some(Signal::TimedOut)),
             ("An unknown error occurred", Some(Signal::Failure)),
             ("Password:", None),
