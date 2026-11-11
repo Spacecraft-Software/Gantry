@@ -19,9 +19,3 @@ path = ["assets/steelbore-logo.txt", "assets/steelbore-wordmark.txt"]
 precedence = "override"
 SPDX-FileCopyrightText = "2026 Mohamed Hammad <Mohamed.Hammad@SpacecraftSoftware.org>"
 SPDX-License-Identifier = "CC-BY-SA-4.0"
-
-[[annotations]]
-path = ["TRADEMARKS.md"]
-precedence = "override"
-SPDX-FileCopyrightText = "2026 Mohamed Hammad <Mohamed.Hammad@SpacecraftSoftware.org>"
-SPDX-License-Identifier = "CC-BY-SA-4.0"
