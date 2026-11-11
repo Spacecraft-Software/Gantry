@@ -13,3 +13,9 @@ path = ["assets/katakana-8x16.hex"]
 precedence = "override"
 SPDX-FileCopyrightText = "1998-2023 Roman Czyborra, Paul Hardy and the GNU Unifont contributors"
 SPDX-License-Identifier = "GPL-2.0-or-later"
+
+[[annotations]]
+path = ["assets/steelbore-logo.txt", "assets/steelbore-wordmark.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Mohamed Hammad <Mohamed.Hammad@SpacecraftSoftware.org>"
+SPDX-License-Identifier = "CC-BY-SA-4.0"

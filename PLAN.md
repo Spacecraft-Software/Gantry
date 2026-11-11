@@ -37,6 +37,7 @@ MVP: M0–M3 — Gantry v1.0
 - [ ] P-029 Nickel config and themes evaluated at runtime, with contracts
 - [x] P-031 Katakana Matrix rain on the Linux console (patched console font, restored on exit)
 - [x] P-032 Login-screen clock with the UTC offset (tuigreet parity)
+- [x] P-036 Steelbore OS branding: logo banner on Steelbore OS, name on short screens, `brand` setting
 - [ ] P-030 `gnt` command alias and registry entry
 - [x] P-033 CLI Standard surface: noun-verb, envelope, structured errors, `schema`, `describe`, `SKILL.md`
 - [x] P-034 Terminal protocols: kitty keyboard, OSC 9;4 progress, gate, probe, restore, overrides

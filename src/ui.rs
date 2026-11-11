@@ -89,11 +89,15 @@ fn centered(area: Rect, width: u16, height: u16) -> Rect {
 
 fn draw_login(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let s = &app.styles;
-    let owned = vt_sanitize(&app.banner.lines(app.variant), glyphs(app));
-    let art: Vec<&str> = owned.iter().map(String::as_str).collect();
-    let art_h = u16::try_from(art.len()).unwrap_or(u16::MAX);
     let scanning = matches!(app.phase, Phase::Scanning(_));
     let box_h: u16 = if scanning { 13 } else { 9 };
+    // Rows left for art once the greeting, box and status line are placed; a
+    // tall logo gives way to a shorter variant (the name) on a short screen.
+    let room = usize::from(area.height.saturating_sub(box_h + 4));
+    let variant = app.banner.fitting(app.variant, room);
+    let owned = vt_sanitize(&app.banner.lines(variant), glyphs(app));
+    let art: Vec<&str> = owned.iter().map(String::as_str).collect();
+    let art_h = u16::try_from(art.len()).unwrap_or(u16::MAX);
     let total = art_h + 2 + box_h + 2;
     let show_art = total <= area.height;
     let column = centered(area, area.width, if show_art { total } else { box_h + 2 });

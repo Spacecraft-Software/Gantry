@@ -78,6 +78,22 @@ pub struct General {
     pub clock: bool,
     /// `strftime` format of that clock (jiff's dialect).
     pub clock_format: String,
+    /// Which built-in banner to show: `auto` picks the Steelbore OS logo on
+    /// Steelbore OS and Gantry's own banner elsewhere.
+    pub brand: Brand,
+}
+
+/// `[general] brand`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Brand {
+    /// Steelbore OS logo when `/etc/os-release` says `ID=steelbore`.
+    #[default]
+    Auto,
+    /// Always the Steelbore OS logo.
+    Steelbore,
+    /// Always Gantry's own banner.
+    Gantry,
 }
 
 /// Default login-screen clock: local time with its UTC offset.
@@ -98,6 +114,7 @@ impl Default for General {
             setfont: PathBuf::from("setfont"),
             clock: true,
             clock_format: DEFAULT_CLOCK_FORMAT.to_owned(),
+            brand: Brand::Auto,
         }
     }
 }
