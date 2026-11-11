@@ -16,6 +16,6 @@ SPDX-License-Identifier = "GPL-2.0-or-later"
 
 [[annotations]]
 path = ["assets/steelbore-logo.txt", "assets/steelbore-wordmark.txt"]
-precedence = "aggregate"
+precedence = "override"
 SPDX-FileCopyrightText = "2026 Mohamed Hammad <Mohamed.Hammad@SpacecraftSoftware.org>"
-SPDX-License-Identifier = "GPL-3.0-or-later"
+SPDX-License-Identifier = "CC-BY-SA-4.0"
