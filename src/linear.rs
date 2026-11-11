@@ -17,6 +17,7 @@ use ratatui::crossterm::event::{self, Event as TermEvent, KeyCode, KeyEventKind,
 use ratatui::crossterm::terminal;
 use zeroize::Zeroizing;
 
+use crate::art;
 use crate::auth::{Command, Event, MessageKind};
 use crate::config::Config;
 use crate::fingerprint::{self, Signal};
@@ -107,8 +108,9 @@ pub fn run(
     let _raw = RawGuard::new()?;
     say("")?;
     say(&format!(
-        "{} — Gantry login, accessible mode.",
-        cfg.general.greeting
+        "{} — {} login, accessible mode.",
+        cfg.general.greeting,
+        art::product_name(cfg.general.brand, art::host_is_steelbore())
     ))?;
     say("Commands at the user prompt: :sessions to choose a session, :shutdown, :reboot.")?;
     if test_mode {

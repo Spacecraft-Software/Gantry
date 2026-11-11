@@ -14,10 +14,11 @@ Gantry is a Rust greetd greeter (ratatui + crossterm) for Steelbore OS Bravais. 
 - `src/auth.rs`: the greetd worker thread and the mock backend.
 - `src/ui.rs`: rendering. `src/linear.rs`: accessible mode.
 - `src/theme.rs`: palette registry and §11.6 resolution. It reads `assets/steelbore.toml`, which is never edited by hand.
+- `src/art.rs`: banners. On Steelbore OS (`[general] brand`, `auto` reads `ID=` from os-release) the built-in banner is `assets/steelbore-logo.txt`, with `steelbore-wordmark.txt` for short screens. Regenerate both with `tools/logo2art.py`; never edit them by hand.
 - `src/fx/`: background effects, banner effects and the clock font.
 - `src/output.rs`: the dual-mode CLI surface (agent detection, format cascade, JSON envelope, severity-tagged diagnostics, structured errors and exit codes). `src/introspect.rs`: `schema` and `describe`.
 - `src/termproto.rs`: terminal protocols (kitty keyboard, OSC 9;4 progress), their gate, probe and restore.
-- `src/config.rs`, `src/keys.rs`, `src/sessions.rs`, `src/state.rs`, `src/caps.rs`, `src/fingerprint.rs`, `src/art.rs`.
+- `src/config.rs`, `src/keys.rs`, `src/sessions.rs`, `src/state.rs`, `src/caps.rs`, `src/fingerprint.rs`.
 
 ## Rules
 

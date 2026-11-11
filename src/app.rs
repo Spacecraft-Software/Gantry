@@ -13,7 +13,7 @@ use std::time::Instant;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use zeroize::Zeroizing;
 
-use crate::art::Banner;
+use crate::art::{self, Banner};
 use crate::auth::{Command, Event, MessageKind, Touch};
 use crate::config::Config;
 use crate::fingerprint::{self, Signal};
@@ -840,9 +840,10 @@ fn fallback_mono() -> theme::ThemeDef {
 }
 
 fn banner_for(cfg: &Config, session: Option<&Session>) -> Banner {
+    let base = Banner::for_brand(cfg.general.brand, art::host_is_steelbore());
     match session {
-        Some(s) => Banner::for_session(cfg.art_dir.as_deref(), &s.key()),
-        None => Banner::builtin(),
+        Some(s) => Banner::for_session_or(cfg.art_dir.as_deref(), &s.key(), base),
+        None => base,
     }
 }
 
