@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2026 Mohamed Hammad <Mohamed.Hammad@SpacecraftSoftware.org>
 
-//! Half-width katakana on the Linux console, for the Matrix rain.
+//! Half-width katakana and block glyphs on the Linux console.
+//!
+//! The Steelbore OS logo is drawn in half-blocks (`▀ ▄ ▌ ▐`), and some
+//! console fonts (Terminus' VGA layout among them) lack those, so the kernel
+//! prints a stand-in such as `#` for them. [`Font::add_blocks`] draws the
+//! missing ones from scratch.
 //!
 //! The console font holds at most 512 glyphs, and the stock ones have no
 //! katakana. While Gantry runs it can swap in a patched copy of the current
@@ -63,6 +68,8 @@ pub enum PsfError {
     NoRoom {
         /// Spare glyphs found.
         found: usize,
+        /// Spare glyphs needed.
+        need: usize,
     },
 }
 
@@ -72,9 +79,9 @@ impl fmt::Display for PsfError {
             Self::Truncated => f.write_str("console font is truncated"),
             Self::BadMagic => f.write_str("not a PSF console font"),
             Self::Unsupported(what) => write!(f, "unsupported console font: {what}"),
-            Self::NoRoom { found } => write!(
+            Self::NoRoom { found, need } => write!(
                 f,
-                "console font has {found} spare glyphs; katakana need {KANA_COUNT}"
+                "console font has {found} spare glyphs; the login screen needs {need}"
             ),
         }
     }
@@ -278,15 +285,20 @@ impl Font {
         kana_chars().all(|c| self.slot_of(c).is_some())
     }
 
-    /// Gives the 56 half-width katakana a glyph each, taking the slots the
-    /// login screen can best spare. A font that already has them is left as is.
-    ///
-    /// # Errors
-    /// [`PsfError::NoRoom`] when fewer than 56 slots map only to spare scripts.
-    pub fn add_kana(&mut self) -> Result<(), PsfError> {
-        if self.has_kana() {
-            return Ok(());
-        }
+    /// True when every block glyph the banner uses has a glyph.
+    #[must_use]
+    pub fn has_blocks(&self) -> bool {
+        BLOCKS.iter().all(|&c| self.slot_of(c).is_some())
+    }
+
+    /// True when neither [`Font::add_kana`] nor [`Font::add_blocks`] has anything to do.
+    #[must_use]
+    pub fn is_complete(&self) -> bool {
+        self.has_kana() && self.has_blocks()
+    }
+
+    /// The `n` slots the login screen can best spare, best first.
+    fn spare_slots(&self, n: usize) -> Result<Vec<usize>, PsfError> {
         let mut spare: Vec<(u8, usize)> = self
             .table
             .iter()
@@ -299,17 +311,86 @@ impl Font {
                 worst.map(|rank| (rank, slot))
             })
             .collect();
-        if spare.len() < KANA_COUNT {
-            return Err(PsfError::NoRoom { found: spare.len() });
+        if spare.len() < n {
+            return Err(PsfError::NoRoom {
+                found: spare.len(),
+                need: n,
+            });
         }
         spare.sort_unstable();
+        Ok(spare.into_iter().take(n).map(|(_, slot)| slot).collect())
+    }
+
+    /// Draws the block glyphs the font lacks into slots the login screen can
+    /// spare. Glyphs it already has are kept.
+    ///
+    /// # Errors
+    /// [`PsfError::NoRoom`] when there are too few spare slots.
+    pub fn add_blocks(&mut self) -> Result<(), PsfError> {
+        let missing: Vec<char> = BLOCKS
+            .iter()
+            .copied()
+            .filter(|&c| self.slot_of(c).is_none())
+            .collect();
+        if missing.is_empty() {
+            return Ok(());
+        }
+        for (slot, c) in self.spare_slots(missing.len())?.into_iter().zip(missing) {
+            self.glyphs[slot] = block_bitmap(c, self.width, self.height);
+            self.table[slot] = vec![Entry::Char(c)];
+        }
+        Ok(())
+    }
+
+    /// Gives the 56 half-width katakana a glyph each, taking the slots the
+    /// login screen can best spare. A font that already has them is left as is.
+    ///
+    /// # Errors
+    /// [`PsfError::NoRoom`] when fewer than 56 slots map only to spare scripts.
+    pub fn add_kana(&mut self) -> Result<(), PsfError> {
+        if self.has_kana() {
+            return Ok(());
+        }
+        let slots = self.spare_slots(KANA_COUNT)?;
         let bitmaps = kana_bitmaps().ok_or(PsfError::Unsupported("katakana asset"))?;
-        for ((_, slot), (c, bits)) in spare.into_iter().zip(kana_chars().zip(bitmaps)) {
+        for (slot, (c, bits)) in slots.into_iter().zip(kana_chars().zip(bitmaps)) {
             self.glyphs[slot] = scale(&bits, self.width, self.height);
             self.table[slot] = vec![Entry::Char(c)];
         }
         Ok(())
     }
+}
+
+/// The block glyphs the banner and login box draw with.
+const BLOCKS: [char; 8] = ['█', '▀', '▄', '▌', '▐', '░', '▒', '▓'];
+
+/// A `width` x `height` bitmap of block glyph `c`.
+fn block_bitmap(c: char, width: u32, height: u32) -> Vec<u8> {
+    let p = pitch(width);
+    let (w, h) = (
+        usize::try_from(width).unwrap_or(8),
+        usize::try_from(height).unwrap_or(16),
+    );
+    let mut out = vec![0; p * h];
+    for y in 0..h {
+        for x in 0..w {
+            let on = match c {
+                '█' => true,
+                '▀' => y < h / 2,
+                '▄' => y >= h / 2,
+                '▌' => x < w / 2,
+                '▐' => x >= w / 2,
+                '░' => (x + y) % 4 == 0 && y % 2 == 0,
+                '▒' => (x + y) % 2 == 0,
+                '▓' => (x + y) % 4 != 0 || y % 2 == 1,
+                _ => false,
+            };
+            if on {
+                out[y * p + x / 8] |= 0x80 >> (x % 8);
+            }
+        }
+    }
+    out
 }
 
 /// How readily a code point's glyph can go (lower first), or `None` when the
@@ -417,13 +498,13 @@ pub fn load(program: &Path, dir: &Path) -> anyhow::Result<Loaded> {
     let patched = dir.join("console-font.gantry.psf");
     setfont(program, &["-O".as_ref(), current.as_os_str()])?;
     let mut font = Font::parse(&fs::read(&current)?)?;
-    if font.has_kana() {
+    if font.is_complete() {
         // Already patched: an earlier run did not get to restore. The saved
         // original, when there is one, is still the font to go back to.
         let saved = fs::read(&original)
             .ok()
             .and_then(|d| Font::parse(&d).ok())
-            .is_some_and(|f| !f.has_kana());
+            .is_some_and(|f| !f.is_complete());
         let target = if saved { original } else { current };
         return Ok(Loaded {
             setfont: program.to_owned(),
@@ -431,6 +512,10 @@ pub fn load(program: &Path, dir: &Path) -> anyhow::Result<Loaded> {
         });
     }
     fs::rename(&current, &original)?;
+    // The logo is half-blocks; a font that cannot take them still gets its katakana.
+    if let Err(e) = font.add_blocks() {
+        tracing::warn!("block glyphs not added to the console font: {e}");
+    }
     font.add_kana()?;
     fs::write(&patched, font.to_psf2())?;
     setfont(program, &[patched.as_os_str()])?;
@@ -562,7 +647,34 @@ mod tests {
             e.push(Entry::Char('A'));
             e
         });
-        assert_eq!(f.add_kana(), Err(PsfError::NoRoom { found: 0 }));
+        assert_eq!(
+            f.add_kana(),
+            Err(PsfError::NoRoom {
+                found: 0,
+                need: KANA_COUNT
+            })
+        );
+    }
+
+    #[test]
+    fn missing_blocks_are_drawn_and_present_ones_kept() {
+        // A font with only ▀ and █ mapped: the other half-blocks get glyphs.
+        let mut f = font(latin1);
+        f.table[1] = vec![Entry::Char('▀')];
+        f.table[2] = vec![Entry::Char('█')];
+        let (top, full) = (f.glyphs[1].clone(), f.glyphs[2].clone());
+        assert!(!f.has_blocks());
+        f.add_blocks().expect("room");
+        assert!(f.has_blocks());
+        assert_eq!((&f.glyphs[1], &f.glyphs[2]), (&top, &full), "kept");
+        let lower = f.slot_of('▄').expect("▄ drawn");
+        assert_eq!(&f.glyphs[lower][..8], &[0; 8][..], "top half empty");
+        assert_eq!(&f.glyphs[lower][8..], &[0xFF; 8][..], "bottom half set");
+        let left = f.slot_of('▌').expect("▌ drawn");
+        assert!(f.glyphs[left].iter().all(|&r| r == 0xF0));
+        for c in (' '..='~').chain(['×', '÷', '£', '©', '·']) {
+            assert!(f.slot_of(c).is_some(), "{c:?} kept");
+        }
     }
 
     #[test]
@@ -627,7 +739,7 @@ mod tests {
 
         let loaded = load(&setfont, &dir).expect("loads");
         let live = Font::parse(&fs::read(dir.join("console.psf")).expect("read")).expect("parse");
-        assert!(live.has_kana());
+        assert!(live.is_complete(), "katakana and blocks");
         assert!(
             dir.join("console-font.orig.psf").exists(),
             "kept for crash recovery"
