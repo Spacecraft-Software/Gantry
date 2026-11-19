@@ -3,9 +3,12 @@
 # SPDX-FileCopyrightText: 2026 Mohamed Hammad <Mohamed.Hammad@SpacecraftSoftware.org>
 """Regenerate the Steelbore OS banner art in assets/.
 
-Usage: tools/logo2art.py [path/to/steelbore-os.svg]
+Usage: tools/logo2art.py [path/to/sb_logo.svg]
 
-The emblem (Bravais's `assets/brand/steelbore-os.svg`, which has no text) is
+The emblem is `logo/steelbore/sb_logo.svg` from the Spacecraft-Software/Branding
+repository (https://github.com/Spacecraft-Software/Branding), the single source
+of the Steelbore marks. By default it is read from the umbrella's clone of that
+repository; pass a path to use another copy. The emblem has no text; it is
 trimmed, scaled to 36 columns and packed into half-blocks (U+2580, U+2584,
 U+2588). The Linux console draws those from its own font, and Gantry adds any
 the font lacks (see `src/vtfont.rs`). The wordmark is composed from a small
@@ -21,7 +24,7 @@ from PIL import Image, ImageOps
 
 COLS = 36
 THRESHOLD = 150  # 0..255; darker than this is ink
-DEFAULT_SVG = "/spacecraft-software/bravais/assets/brand/steelbore-os.svg"
+DEFAULT_SVG = "/spacecraft-software/branding/logo/steelbore/sb_logo.svg"
 ASSETS = pathlib.Path(__file__).resolve().parent.parent / "assets"
 
 FONT = {
@@ -81,5 +84,11 @@ def wordmark(text: str) -> str:
 
 if __name__ == "__main__":
     svg = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_SVG
+    if not pathlib.Path(svg).is_file():
+        sys.exit(
+            f"logo2art: {svg} not found. Clone "
+            "https://github.com/Spacecraft-Software/Branding and pass "
+            "path/to/Branding/logo/steelbore/sb_logo.svg"
+        )
     (ASSETS / "steelbore-logo.txt").write_text(logo(svg), encoding="utf-8")
     (ASSETS / "steelbore-wordmark.txt").write_text(wordmark("STEELBORE OS"), encoding="utf-8")
